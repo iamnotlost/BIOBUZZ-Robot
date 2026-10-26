@@ -26,6 +26,7 @@ public abstract class baseTeleOp extends OpMode {
     int sendStage = 0;
     int cstSpeed = 2000;
     boolean buttonPressed = false;
+    boolean prevOpponentNectar = false;
     
     boolean autoRotating = false;
     // Red angles; blue mirrors them via Alliance.sign
@@ -60,6 +61,7 @@ public abstract class baseTeleOp extends OpMode {
         currentTargetHeading = targetHeadingFarRad;
 
         telemetry.addData("init", "complete (" + alliance() + ")");
+        telemetry.addData("Missing", hwManager.missingText());
     }
 
     @Override
@@ -69,7 +71,7 @@ public abstract class baseTeleOp extends OpMode {
 
     @Override
     public void loop() {
-        hwManager.pinpoint.update();
+        hwManager.update();
         matchTimer.update(gamepad1, gamepad2);
 
         if (matchTimer.isOver()) {
@@ -80,14 +82,19 @@ public abstract class baseTeleOp extends OpMode {
         }
 
         shooter.update();
-        buttonPressed = !hwManager.button.getState();
+        buttonPressed = hwManager.buttonPressed();
 
         telemetry.addData("Time left", matchTimer.display());
         telemetry.addData("NECTAR -> FLOWER", matchTimer.nectarFlowerAllowed() ? "ALLOWED" : "not yet");
+        boolean opponentNectar = hwManager.elementSensor.isOpponentNectar(alliance());
+        if (opponentNectar && !prevOpponentNectar) gamepad1.rumble(500);
+        prevOpponentNectar = opponentNectar;
+
+        telemetry.addData("Ball", opponentNectar ? "OPPONENT NECTAR - spit it out!" : hwManager.elementSensor.read());
+        telemetry.addData("Missing", hwManager.missingText());
         telemetry.addData("Button Pressed", buttonPressed);
-        telemetry.addData("Shooter velocity", hwManager.shooter.getVelocity());
-        telemetry.addData("Shooter follower power", hwManager.secondShooter.getPower());
-        telemetry.addData("Heading (deg)", Math.toDegrees(hwManager.pinpoint.getHeading()));
+        telemetry.addData("Shooter velocity", hwManager.shooterVelocity());
+        telemetry.addData("Heading (deg)", Math.toDegrees(hwManager.getHeading()));
         telemetry.addData("Auto-rotate", autoRotating ? "ON (target " + Math.toDegrees(currentTargetHeading) + " deg)" : "off");
         telemetry.addData("Heading hold", headingHoldActive ? "ON (target " + Math.toDegrees(headingHoldRad) + " deg)" : "off");
         telemetry.update();
@@ -107,7 +114,7 @@ public abstract class baseTeleOp extends OpMode {
 
         double driveRx = rx * speedMult;
         if (autoRotating) {
-            double error = normalizeAngle(currentTargetHeading - hwManager.pinpoint.getHeading());
+            double error = normalizeAngle(currentTargetHeading - hwManager.getHeading());
             if (Math.abs(error) < HEADING_TOLERANCE) {
                 autoRotating = false;
                 driveRx = 0;
@@ -124,11 +131,11 @@ public abstract class baseTeleOp extends OpMode {
             headingHoldDelayTimer.reset();
         } else {
             if (!headingHoldActive && headingHoldDelayTimer.milliseconds() >= HEADING_HOLD_DELAY_MS) {
-                headingHoldRad    = hwManager.pinpoint.getHeading();
+                headingHoldRad    = hwManager.getHeading();
                 headingHoldActive = true;
             }
             if (headingHoldActive) {
-                double error = normalizeAngle(headingHoldRad - hwManager.pinpoint.getHeading());
+                double error = normalizeAngle(headingHoldRad - hwManager.getHeading());
                 if (Math.abs(error) >= HEADING_TOLERANCE) {
                     double correction = Constants.followerConstants.coefficientsHeadingPIDF.P * error
                             + Constants.followerConstants.coefficientsHeadingPIDF.F * Math.signum(error);
@@ -267,7 +274,7 @@ public abstract class baseTeleOp extends OpMode {
     }
 
     private void handleSendAllFar() {
-        double currentVel = hwManager.shooter.getVelocity();
+        double currentVel = hwManager.shooterVelocity();
 
         switch (sendStage) {
             case 0: {
@@ -292,7 +299,7 @@ public abstract class baseTeleOp extends OpMode {
     }
 
     private void handleSendAllContinuous() {
-        double currentVel = hwManager.shooter.getVelocity();
+        double currentVel = hwManager.shooterVelocity();
 
         switch (sendStage) {
             case 0: {
@@ -317,8 +324,8 @@ public abstract class baseTeleOp extends OpMode {
     }
 
     private void handleSendAllStaged() {
-        double currentVel = hwManager.shooter.getVelocity();
-        boolean btn = !hwManager.button.getState();
+        double currentVel = hwManager.shooterVelocity();
+        boolean btn = hwManager.buttonPressed();
 
         switch (sendStage) {
             case 0: {

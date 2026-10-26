@@ -15,27 +15,31 @@ public class supply {
         this.hwManager = hwManager;
     }
 
+    private void setVelocity(int velocity) {
+        if (hwManager.supply != null) hwManager.supply.setVelocity(velocity);
+    }
+
     public void turnOn() {
         if (running) return;
-        hwManager.supply.setVelocity(1400);
+        setVelocity(1400);
         running = true;
         stopArmed = false;
     }
     public void turnOn(int velocity) {
         if (running) return;
-        hwManager.supply.setVelocity(velocity);
+        setVelocity(velocity);
         running = true;
         stopArmed = false;
     }
     public void turnOnSlow() {
         if (running) return;
-        hwManager.supply.setVelocity(1400);
+        setVelocity(1400);
         running = true;
         stopArmed = false;
     }
     public void turnOff() {
         if (!running) return;
-        hwManager.supply.setVelocity(0);
+        setVelocity(0);
         running = false;
     }
     public void toggle() {

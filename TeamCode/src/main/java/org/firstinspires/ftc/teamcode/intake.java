@@ -2,19 +2,26 @@ package org.firstinspires.ftc.teamcode;
 public class intake {
     hwManager hwManager;
 
+    public static int IN_VELOCITY  = 2000;
+    public static int OUT_VELOCITY = -1000;
+
     public boolean running = false;
     boolean reverse = false;
     public intake(hwManager hwManager) {
         this.hwManager = hwManager;
     }
+    private void setVelocity(int velocity) {
+        if (hwManager.intake != null) hwManager.intake.setVelocity(velocity);
+    }
     public void turnOn() {
         if (running) return;
-        hwManager.intake.setVelocity(2000);
+        setVelocity(IN_VELOCITY);
         running = true;
+        reverse = false;
     }
     public void turnOff() {
         if (!running) return;
-        hwManager.intake.setVelocity(0);
+        setVelocity(0);
         running = false;
     }
     public void toggle() {
@@ -25,18 +32,23 @@ public class intake {
         }
     }
     public void stop() {
-        hwManager.intake.setVelocity(0);
+        setVelocity(0);
         running = false;
         reverse = false;
     }
+    public void reverseOn() {
+        setVelocity(OUT_VELOCITY);
+        reverse = true;
+        running = false;
+    }
+    public boolean isReversing() {
+        return reverse;
+    }
     public void toggleReverse() {
         if (reverse) {
-            hwManager.intake.setVelocity(0);
-            reverse = false;
+            stop();
         } else {
-            hwManager.intake.setVelocity(-1000);
-            reverse = true;
+            reverseOn();
         }
-        running = false;
     }
 }

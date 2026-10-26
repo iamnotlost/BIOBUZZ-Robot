@@ -1,5 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.robotcore.hardware.DcMotorEx;
+
 public class drivetrain {
     hwManager hwManager;
     private static final double STRAFE_CORRECTION = 1.1;
@@ -9,26 +11,35 @@ public class drivetrain {
     }
 
     public void resetYaw() {
-        hwManager.pinpoint.resetPosAndIMU();
+        hwManager.resetHeading();
     }
 
+    // Field-centric: x/y are relative to the field, rx turns the robot
     public void drive(double x, double y, double rx) {
-        x = x * STRAFE_CORRECTION;
-
-        double botHeading = hwManager.pinpoint.getHeading();
+        double botHeading = hwManager.getHeading();
 
         double rotX = x * Math.cos(-botHeading) - y * Math.sin(-botHeading);
         double rotY = x * Math.sin(-botHeading) + y * Math.cos(-botHeading);
 
-        double denominator = Math.max(Math.abs(rotY) + Math.abs(rotX) + Math.abs(rx), 1);
-        double frontLeftPower = (rotY + rotX + rx) / denominator;
-        double backLeftPower = (rotY - rotX + rx) / denominator;
-        double frontRightPower = (rotY - rotX - rx) / denominator;
-        double backRightPower = (rotY + rotX - rx) / denominator;
+        driveRobotCentric(rotX, rotY, rx);
+    }
 
-        hwManager.frontLeft.setPower(frontLeftPower);
-        hwManager.frontRight.setPower(frontRightPower);
-        hwManager.backLeft.setPower(backLeftPower);
-        hwManager.backRight.setPower(backRightPower);
+    // Robot-centric: forward is wherever the robot faces
+    public void driveRobotCentric(double x, double y, double rx) {
+        x = x * STRAFE_CORRECTION;
+
+        double denominator = Math.max(Math.abs(y) + Math.abs(x) + Math.abs(rx), 1);
+        setPower(hwManager.frontLeft,  (y + x + rx) / denominator);
+        setPower(hwManager.backLeft,   (y - x + rx) / denominator);
+        setPower(hwManager.frontRight, (y - x - rx) / denominator);
+        setPower(hwManager.backRight,  (y + x - rx) / denominator);
+    }
+
+    public void stop() {
+        driveRobotCentric(0, 0, 0);
+    }
+
+    private void setPower(DcMotorEx motor, double power) {
+        if (motor != null) motor.setPower(power);
     }
 }

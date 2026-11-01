@@ -15,16 +15,27 @@ public abstract class baseTeleOp extends OpMode {
 
     protected abstract Alliance alliance();
 
-    boolean prevCross;
     boolean prevDPadUp, prevDPadDown, prevG2Up, prevG2Down;
     boolean prevRBumper, prevLBumper;
     boolean prevDPadRight, prevDPadLeft;
-    boolean prevOptions, prevTriangle, prevCircle, prevSquare;
+    boolean prevOptions;
 
-    ElapsedTime sendTimer = new ElapsedTime();
-    boolean sendingAll = false;
-    int sendStage = 0;
-    int cstSpeed = 2000;
+    // Shooting: hold triangle (close) or square (far). The wheel spins up first and the feeder only
+    // pushes a ball in while the wheel is at speed, so every ball leaves at full speed.
+    public static int CLOSE_SHOT_VELOCITY = 1320;
+    public static int FAR_SHOT_VELOCITY   = 1860;
+    public static int SHOT_FEED_VELOCITY  = 1500;
+    // Feeder speed while holding cross, slow enough to place a ball exactly
+    public static int NUDGE_VELOCITY      = 600;
+    private static final double READY_TOLERANCE = 80;   // within this of the target = ready to feed
+    private static final double DROP_TOLERANCE  = 150;  // this far below = a ball just went through, wait
+
+    boolean loading = false;     // R1
+    boolean preSpin = false;     // L1
+    boolean shooting = false;
+    boolean feedingShot = false;
+    boolean nudging = false;
+    boolean reversing = false;
     boolean buttonPressed = false;
     boolean prevOpponentNectar = false;
     
@@ -106,7 +117,6 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Auto-rotate", autoRotating ? "ON (target " + Math.toDegrees(currentTargetHeading) + " deg)" : "off");
         telemetry.addData("Heading hold", !headingHoldEnabled ? "OFF (Share to turn on)"
                 : headingHoldActive ? String.format("holding %.0f deg (Share to turn off)", Math.toDegrees(headingHoldRad)) : "on");
-        telemetry.update();
 
         double x  = -drivetrain.curve(gamepad1.left_stick_x)  * drivetrain.MAX_SPEED;
         double y  =  drivetrain.curve(gamepad1.left_stick_y)  * drivetrain.MAX_SPEED;
@@ -182,61 +192,117 @@ public abstract class baseTeleOp extends OpMode {
         prevG2Up     = gamepad2.dpad_up;
         prevG2Down   = gamepad2.dpad_down;
 
-        boolean crossPressed     = gamepad1.cross;
-        boolean rBumperPressed   = gamepad1.right_bumper;
-        boolean lBumperPressed   = gamepad1.left_bumper;
-        boolean dpadRightPressed = gamepad1.dpad_right;
-        boolean dpadLeftPressed  = gamepad1.dpad_left;
-        boolean trianglePressed  = gamepad1.triangle;
-        boolean circlePressed    = gamepad1.circle;
-        boolean squarePressed    = gamepad1.square;
-
-        if (dpadRightPressed && !prevDPadRight) {
+        if (gamepad1.dpad_right && !prevDPadRight) {
             currentTargetHeading = targetHeadingFarRad;
             autoRotating = true;
         }
-        if (dpadLeftPressed && !prevDPadLeft) {
+        if (gamepad1.dpad_left && !prevDPadLeft) {
             currentTargetHeading = targetHeading45Rad;
             autoRotating = true;
         }
 
-        if (sendingAll) {
-            if ((trianglePressed && !prevTriangle) || (squarePressed && !prevSquare)) {
-                stopSendAll();
-            } else {
-                handleSendAll();
-            }
-        } else {
-            if (trianglePressed && !prevTriangle) startSendAll();
-            if (squarePressed   && !prevSquare)   startSendAllFar();
+        handleBalls();
+        telemetry.update();
 
-            if (crossPressed   && !prevCross)    supply.toggle();
-            if (lBumperPressed && !prevLBumper)  shooter.shootCustom(cstSpeed);
-            if (circlePressed  && !prevCircle) {
-                intake.toggleReverse();
-                supply.turnOff(); // spitting out: don't keep pushing balls up
-            }
+        prevRBumper   = gamepad1.right_bumper;
+        prevLBumper   = gamepad1.left_bumper;
+        prevDPadRight = gamepad1.dpad_right;
+        prevDPadLeft  = gamepad1.dpad_left;
+        prevOptions   = gamepad1.options;
+    }
 
-            // R1 loads: intake (slow, to spare its bands) + feeder (its own faster speed) together,
-            // and a second press stops both
-            if (rBumperPressed && !prevRBumper) {
-                intake.toggle();
-                if (intake.running && !buttonPressed) supply.turnOn(supply.LOAD_VELOCITY);
-                else if (!intake.running) supply.turnOff();
-            }
+    // Intake, feeder and shooter. Holding a shoot button wins over everything else; holding
+    // circle (reverse) wins over loading and nudging.
+    private void handleBalls() {
+        boolean shootClose = gamepad1.triangle;
+        boolean shootFar   = gamepad1.square;
+
+        if (gamepad1.left_bumper && !prevLBumper) {
+            preSpin = !preSpin;
+            if (preSpin) shooter.spinTo(CLOSE_SHOT_VELOCITY);
+            else if (!shootClose && !shootFar) shooter.turnOff();
         }
 
-        supply.stopOnButton(buttonPressed && shooter.currentMode == 0);
+        if (shootClose || shootFar) {
+            int target = shootFar ? FAR_SHOT_VELOCITY : CLOSE_SHOT_VELOCITY;
+            if (!shooting) {
+                shooting = true;
+                feedingShot = false;
+                loading = nudging = reversing = false;
+                supply.turnOff(); // nothing reaches the wheel before it is at speed
+                intake.stop();
+            }
+            shooter.spinTo(target);
 
-        prevCross        = crossPressed;
-        prevRBumper      = rBumperPressed;
-        prevLBumper      = lBumperPressed;
-        prevDPadRight    = dpadRightPressed;
-        prevDPadLeft     = dpadLeftPressed;
-        prevOptions      = gamepad1.options;
-        prevTriangle     = trianglePressed;
-        prevCircle       = circlePressed;
-        prevSquare       = squarePressed;
+            double vel = hwManager.shooterVelocity();
+            if (!feedingShot && Math.abs(vel - target) < READY_TOLERANCE) {
+                feedingShot = true;
+                supply.turnOn(SHOT_FEED_VELOCITY);
+                intake.turnOn();
+            } else if (feedingShot && vel < target - DROP_TOLERANCE) {
+                // a ball just took speed off the wheel: pause until it recovers
+                feedingShot = false;
+                supply.turnOff();
+                intake.turnOff();
+            }
+            telemetry.addData("Shooter", "%.0f / %d  %s", vel, target, feedingShot ? "FEEDING" : "spinning up");
+            return;
+        }
+
+        if (shooting) {
+            shooting = false;
+            feedingShot = false;
+            supply.turnOff();
+            intake.stop();
+            if (preSpin) shooter.spinTo(CLOSE_SHOT_VELOCITY);
+            else shooter.turnOff();
+        }
+
+        // R1 toggles loading: intake (slow, spares its bands) + feeder at its own speed
+        if (gamepad1.right_bumper && !prevRBumper) loading = !loading;
+
+        // Hold circle: intake and feeder run backwards to pull a ball back down or spit it out
+        if (gamepad1.circle) {
+            if (!reversing) {
+                reversing = true;
+                loading = false;
+                intake.reverseOn();
+                supply.turnOff();
+                supply.turnOn(-NUDGE_VELOCITY);
+            }
+            return;
+        }
+        if (reversing) {
+            reversing = false;
+            intake.stop();
+            supply.turnOff();
+        }
+
+        // Hold cross: feeder pushes up slowly, only while held
+        if (gamepad1.cross) {
+            if (!nudging) {
+                nudging = true;
+                supply.turnOff();
+                supply.turnOn(NUDGE_VELOCITY);
+            }
+        } else if (nudging) {
+            nudging = false;
+            supply.turnOff();
+        }
+
+        if (loading) {
+            intake.turnOn();
+            // stop the feeder once a ball is staged at the button sensor (if the robot has one)
+            if (!nudging) {
+                if (buttonPressed) supply.turnOff();
+                else supply.turnOn(supply.LOAD_VELOCITY);
+            }
+        } else if (intake.running) {
+            intake.turnOff();
+            if (!nudging) supply.turnOff();
+        }
+
+        telemetry.addData("Shooter", preSpin ? String.format("pre-spinning %.0f", hwManager.shooterVelocity()) : "off (L1 to pre-spin)");
     }
 
     private double normalizeAngle(double angle) {
@@ -244,193 +310,14 @@ public abstract class baseTeleOp extends OpMode {
         while (angle < -Math.PI) angle += 2 * Math.PI;
         return angle;
     }
-    private static final double VELOCITY_THRESHOLD   = 200;
-    private static final double RECOVERY_THRESHOLD   = 100;
-    private static final double DROP_THRESHOLD       = 150;
-    private static final long   SPINUP_TIMEOUT_MS    = 2500;
-    private static final long   PUSH_MIN_MS          = 120;
-    private static final long   PUSH_TIMEOUT_MS      = 700;
-    private static final long   RELOAD_DWELL_MS      = 200;
-    private static final long   RELOAD_TIMEOUT_MS    = 800;
-    private static final long   RECOVERY_TIMEOUT_MS  = 800;
-    private static final long   CONTINUOUS_FEED_MS   = 2000;
-    private static final int    TOTAL_BALLS          = 3;
-
-    private static final double FAR_VELOCITY            = 1860;
-    private static final double FAR_VELOCITY_TOLERANCE  = 40;
-    private static final long   FAR_SPINUP_TIMEOUT_MS   = 2000;
-    private static final long   FAR_FEED_MS             = 3500;
-    private static final int    FAR_SUPPLY_VELOCITY     = 520;
-
-    private int     targetVelocity     = 1320;
-    private int     sendSupplyVelocity = 1200;
-    private int     ballsSent          = 0;
-    private boolean stagedSend         = false;
-    private boolean farMode            = false;
-
-    private void startSendAll() {
-        sendingAll = true;
-        sendStage  = 0;
-        ballsSent  = 0;
-        targetVelocity     = 1320;
-        sendSupplyVelocity = 1500;
-        stagedSend         = false;
-        sendTimer.reset();
-
-        shooter.shootCustom(targetVelocity);
-    }
-
-    private void startSendAllFar() {
-        sendingAll = true;
-        sendStage  = 0;
-        ballsSent  = 0;
-        farMode    = true;
-        stagedSend = false;
-        sendTimer.reset();
-
-        if (shooter.currentMode != 1) {
-            shooter.shootFar();
-        }
-    }
-
-    private void handleSendAll() {
-        if (farMode)         handleSendAllFar();
-        else if (stagedSend) handleSendAllStaged();
-        else                 handleSendAllContinuous();
-    }
-
-    private void handleSendAllFar() {
-        double currentVel = hwManager.shooterVelocity();
-
-        switch (sendStage) {
-            case 0: {
-                boolean atSpeed  = Math.abs(currentVel - FAR_VELOCITY) < FAR_VELOCITY_TOLERANCE;
-                boolean timedOut = sendTimer.milliseconds() >= FAR_SPINUP_TIMEOUT_MS;
-                if (atSpeed || timedOut) {
-                    intake.turnOn();
-                    supply.turnOn(FAR_SUPPLY_VELOCITY);
-                    sendTimer.reset();
-                    sendStage = 1;
-                }
-                break;
-            }
-
-            case 1: {
-                if (sendTimer.milliseconds() >= FAR_FEED_MS) {
-                    stopSendAll();
-                }
-                break;
-            }
-        }
-    }
-
-    private void handleSendAllContinuous() {
-        double currentVel = hwManager.shooterVelocity();
-
-        switch (sendStage) {
-            case 0: {
-                boolean atSpeed  = Math.abs(currentVel - targetVelocity) < VELOCITY_THRESHOLD;
-                boolean timedOut = sendTimer.milliseconds() >= SPINUP_TIMEOUT_MS;
-                if (atSpeed || timedOut) {
-                    supply.turnOn(sendSupplyVelocity);
-                    intake.turnOn();
-                    sendTimer.reset();
-                    sendStage = 1;
-                }
-                break;
-            }
-
-            case 1: {
-                if (sendTimer.milliseconds() >= CONTINUOUS_FEED_MS) {
-                    stopSendAll();
-                }
-                break;
-            }
-        }
-    }
-
-    private void handleSendAllStaged() {
-        double currentVel = hwManager.shooterVelocity();
-        boolean btn = hwManager.buttonPressed();
-
-        switch (sendStage) {
-            case 0: {
-                boolean atSpeed  = Math.abs(currentVel - targetVelocity) < VELOCITY_THRESHOLD;
-                boolean timedOut = sendTimer.milliseconds() >= SPINUP_TIMEOUT_MS;
-                if (atSpeed || timedOut) {
-                    supply.turnOn(sendSupplyVelocity);
-                    sendTimer.reset();
-                    sendStage = 1;
-                }
-                break;
-            }
-
-            case 1: {
-                boolean ballLeft = sendTimer.milliseconds() >= PUSH_MIN_MS
-                        && currentVel < targetVelocity - DROP_THRESHOLD;
-                boolean timedOut = sendTimer.milliseconds() >= PUSH_TIMEOUT_MS;
-                if (ballLeft || timedOut) {
-                    supply.turnOff();
-                    ballsSent++;
-                    if (ballsSent >= TOTAL_BALLS) {
-                        stopSendAll();
-                    } else {
-                        sendTimer.reset();
-                        sendStage = 2;
-                    }
-                }
-                break;
-            }
-
-            case 2: {
-                intake.turnOn();
-                supply.turnOn(sendSupplyVelocity);
-                sendTimer.reset();
-                sendStage = 3;
-                break;
-            }
-
-            case 3: {
-                boolean dwellOk  = sendTimer.milliseconds() >= RELOAD_DWELL_MS;
-                boolean seated   = btn && dwellOk;
-                boolean timedOut = sendTimer.milliseconds() >= RELOAD_TIMEOUT_MS;
-                if (seated || timedOut) {
-                    intake.turnOff();
-                    supply.turnOff();
-                    sendTimer.reset();
-                    sendStage = 4;
-                }
-                break;
-            }
-
-            case 4: {
-                boolean recovered = Math.abs(currentVel - targetVelocity) < RECOVERY_THRESHOLD;
-                boolean timedOut  = sendTimer.milliseconds() >= RECOVERY_TIMEOUT_MS;
-                if (recovered || timedOut) {
-                    supply.turnOn(sendSupplyVelocity);
-                    sendTimer.reset();
-                    sendStage = 1;
-                }
-                break;
-            }
-        }
-    }
-
-    public void stopSendAll() {
-        shooter.turnOff();
-        supply.turnOff();
-        intake.turnOff();
-        sendingAll = false;
-        sendStage  = 0;
-        ballsSent  = 0;
-        farMode    = false;
-    }
 
     // G404: everything unpowered once TELEOP is over
     private void stopAll() {
         drivetrain.stop();
-        stopSendAll();
+        shooter.turnOff();
+        supply.turnOff();
         intake.stop();
+        loading = preSpin = shooting = feedingShot = nudging = reversing = false;
         autoRotating      = false;
         headingHoldActive = false;
     }

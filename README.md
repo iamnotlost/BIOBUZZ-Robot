@@ -42,11 +42,12 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Right / left trigger | Half / quarter speed |
 | Options | Reset heading (point the robot away from you first) |
 | Share | Heading hold on/off (gently keeps the robot pointing the same way when you let go of turning) |
-| Right bumper | Intake on/off |
-| Circle | Intake reverse |
-| Cross | Feeder on/off |
-| Left bumper | Launcher on/off |
-| Triangle / square | Launch everything (close / far) |
+| Right bumper (R1) | Load on/off: intake (slow) + feeder carry balls up toward the shooter (they stop at the button sensor if the robot has one) |
+| Hold cross | Feeder pushes the ball up slowly, only while held |
+| Hold circle | Intake and feeder run backwards while held (pull a ball back down / spit it out) |
+| Hold triangle | Shoot (close): the wheel spins up first, then the feeder pushes balls in only while the wheel is at full speed |
+| Hold square | Shoot (far), same as triangle |
+| Left bumper (L1) | Pre-spin the shooter on/off, so triangle fires instantly |
 | D-pad left/right | Turn to a preset angle |
 | D-pad up/down | Drive top speed up/down (starts at 40%) |
 | Gamepad 2 D-pad up/down | Intake speed up/down (starts at 300) |

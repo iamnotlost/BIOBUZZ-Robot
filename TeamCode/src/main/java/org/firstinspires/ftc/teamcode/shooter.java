@@ -46,6 +46,12 @@ public class shooter {
         currentMode = 3;
     }
 
+    // Spins to a speed without the on/off toggle of the shoot* methods; calling it every loop is fine
+    public void spinTo(int speed) {
+        setVelocity(speed);
+        currentMode = 5;
+    }
+
     public void shootCustom(int speed) {
         if (currentMode == 4) {turnOff(); return;}
         setVelocity(speed);

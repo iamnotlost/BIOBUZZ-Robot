@@ -3,7 +3,6 @@ package org.firstinspires.ftc.teamcode;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 // Shared TeleOp for both alliances; redTeleOp / blueTeleOp only pick the Alliance
 public abstract class baseTeleOp extends OpMode {
@@ -42,10 +41,16 @@ public abstract class baseTeleOp extends OpMode {
     private static final double MIN_ROT_POWER      = 0.15;
     private static final double CANCEL_STICK_THRESH = 0.15;
 
+    // Heading hold: after you let go of the turn stick, gently corrects slow drift. Share toggles it.
+    private boolean headingHoldEnabled = true;
     private boolean headingHoldActive = false;
     private double  headingHoldRad    = 0;
+    private boolean prevShare;
     private final ElapsedTime headingHoldDelayTimer = new ElapsedTime();
-    private static final long HEADING_HOLD_DELAY_MS = 250;
+    private static final long   HEADING_HOLD_DELAY_MS = 400;
+    private static final double HOLD_KP          = 0.5;
+    private static final double HOLD_MAX_POWER   = 0.15;
+    private static final double HOLD_TOLERANCE   = Math.toRadians(3);
 
     @Override
     public void init() {
@@ -99,7 +104,8 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Shooter velocity", hwManager.shooterVelocity());
         telemetry.addData("Heading (deg)", Math.toDegrees(hwManager.getHeading()));
         telemetry.addData("Auto-rotate", autoRotating ? "ON (target " + Math.toDegrees(currentTargetHeading) + " deg)" : "off");
-        telemetry.addData("Heading hold", headingHoldActive ? "ON (target " + Math.toDegrees(headingHoldRad) + " deg)" : "off");
+        telemetry.addData("Heading hold", !headingHoldEnabled ? "OFF (Share to turn on)"
+                : headingHoldActive ? String.format("holding %.0f deg (Share to turn off)", Math.toDegrees(headingHoldRad)) : "on");
         telemetry.update();
 
         double x  = -drivetrain.curve(gamepad1.left_stick_x)  * drivetrain.MAX_SPEED;
@@ -133,17 +139,17 @@ public abstract class baseTeleOp extends OpMode {
             headingHoldActive = false;
             headingHoldDelayTimer.reset();
         } else {
-            if (!headingHoldActive && headingHoldDelayTimer.milliseconds() >= HEADING_HOLD_DELAY_MS) {
+            if (headingHoldEnabled && !headingHoldActive && headingHoldDelayTimer.milliseconds() >= HEADING_HOLD_DELAY_MS) {
                 headingHoldRad    = hwManager.getHeading();
                 headingHoldActive = true;
             }
             if (headingHoldActive) {
+                // Gentle: small power, small dead zone, so it nudges drift back instead of snapping
                 double error = normalizeAngle(headingHoldRad - hwManager.getHeading());
-                if (Math.abs(error) >= HEADING_TOLERANCE) {
-                    double correction = Constants.followerConstants.coefficientsHeadingPIDF.P * error
-                            + Constants.followerConstants.coefficientsHeadingPIDF.F * Math.signum(error);
-                    if (Math.abs(correction) > MAX_ROT_POWER) {
-                        correction = Math.signum(correction) * MAX_ROT_POWER;
+                if (Math.abs(error) >= HOLD_TOLERANCE) {
+                    double correction = HOLD_KP * error;
+                    if (Math.abs(correction) > HOLD_MAX_POWER) {
+                        correction = Math.signum(correction) * HOLD_MAX_POWER;
                     }
                     driveRx = correction;
                 }
@@ -158,6 +164,13 @@ public abstract class baseTeleOp extends OpMode {
             headingHoldActive = false;
             headingHoldDelayTimer.reset();
         }
+
+        if (gamepad1.share && !prevShare) {
+            headingHoldEnabled = !headingHoldEnabled;
+            headingHoldActive = false;
+            headingHoldDelayTimer.reset();
+        }
+        prevShare = gamepad1.share;
 
         // Live tuning: gamepad 1 D-pad up/down = drive top speed, gamepad 2 D-pad up/down = intake speed
         if (gamepad1.dpad_up && !prevDPadUp)     drivetrain.adjustMaxSpeed(1);

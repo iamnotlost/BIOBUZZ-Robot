@@ -1,5 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
+import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.hardware.rev.RevHubOrientationOnRobot;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
@@ -43,6 +44,12 @@ public class hwManager {
     public void initHardware(HardwareMap hardwareMap) {
         this.hardwareMap = hardwareMap;
         missing.clear();
+
+        // Bulk reads: each hub sends all its motor/sensor readings in one message per loop instead of
+        // one message per reading, so the loop runs faster and steadier
+        for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
+            hub.setBulkCachingMode(LynxModule.BulkCachingMode.AUTO);
+        }
 
         frontLeft = driveMotor(FRONT_LEFT, DcMotor.Direction.FORWARD);
         frontRight = driveMotor(FRONT_RIGHT, DcMotor.Direction.REVERSE);

@@ -41,6 +41,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Right stick X | Turn |
 | Right / left trigger | Half / quarter speed |
 | Options | Reset heading (point the robot away from you first) |
+| Share | Heading hold on/off (gently keeps the robot pointing the same way when you let go of turning) |
 | Right bumper | Intake on/off |
 | Circle | Intake reverse |
 | Cross | Feeder on/off |
@@ -51,7 +52,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Gamepad 2 D-pad up/down | Intake speed up/down (starts at 300) |
 
 Driving is softened on purpose: small stick pushes move the robot gently, and it speeds up over about
-half a second instead of jerking. Speed changes made with the D-pad last until the robot app restarts;
+half a second (by time, not loop speed) instead of jerking. Speed changes made with the D-pad last until the robot app restarts;
 to make one permanent, change `MAX_SPEED` in `drivetrain.java` or `IN_VELOCITY` in `intake.java`.
 
 Gamepads rumble at 1:00 left (NECTAR may go into FLOWERS) and 0:20 left, and the robot stops

@@ -61,7 +61,7 @@ public class hwManager {
             intake.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
             intake.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
             intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-            intake.setDirection(DcMotor.Direction.REVERSE);
+            intake.setDirection(DcMotor.Direction.FORWARD); // FORWARD = pulls balls in on this robot
         }
 
         shooter = find(DcMotorEx.class, SHOOTER);

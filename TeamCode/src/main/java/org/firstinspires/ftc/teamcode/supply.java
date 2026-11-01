@@ -21,7 +21,7 @@ public class supply {
 
     // Ticks/s while loading with R1: fast enough to carry balls all the way up to the shooter.
     // Separate from the intake speed, which stays low to spare the intake's rubber bands
-    public static int LOAD_VELOCITY = 1000;
+    public static int LOAD_VELOCITY = 1400;
 
     public void turnOn() {
         if (running) return;

@@ -19,23 +19,30 @@ public abstract class baseTeleOp extends OpMode {
     boolean prevRBumper, prevLBumper;
     boolean prevDPadRight, prevDPadLeft;
     boolean prevOptions;
+    boolean prevTriangle, prevSquare, prevCross, prevCircle;
 
-    // Shooting: hold triangle (close) or square (far). The wheel spins up first and the feeder only
-    // pushes a ball in while the wheel is at speed, so every ball leaves at full speed.
+    // Shooting: tap triangle (close) or square (far) to start, tap again to stop. The wheel spins up
+    // first and the feeder only pushes a ball in while the wheel is at speed, so every ball leaves at
+    // full speed.
     public static int CLOSE_SHOT_VELOCITY = 1320;
     public static int FAR_SHOT_VELOCITY   = 1860;
     public static int SHOT_FEED_VELOCITY  = 1500;
-    // Feeder speed while holding cross, slow enough to place a ball exactly
-    public static int NUDGE_VELOCITY      = 600;
+    // Feeder speed for cross (push balls up) and circle (backwards)
+    public static int FEED_UP_VELOCITY    = 1400;
+    public static int REVERSE_VELOCITY    = 800;
     private static final double READY_TOLERANCE = 80;   // within this of the target = ready to feed
     private static final double DROP_TOLERANCE  = 150;  // this far below = a ball just went through, wait
 
-    boolean loading = false;     // R1
-    boolean preSpin = false;     // L1
-    boolean shooting = false;
+    private static final int NOT_SHOOTING = 0, SHOOT_CLOSE = 1, SHOOT_FAR = 2;
+    int shootMode = NOT_SHOOTING; // triangle / square
+    boolean loading = false;      // R1
+    boolean preSpin = false;      // L1
+    boolean feedingUp = false;    // cross
+    boolean reversing = false;    // circle
     boolean feedingShot = false;
-    boolean nudging = false;
-    boolean reversing = false;
+    // last speeds sent, so motors are only told when something changes
+    private int lastFeeder = 0;
+    private int lastIntake = 0;   // 1 in, -1 out, 0 stopped
     boolean buttonPressed = false;
     boolean prevOpponentNectar = false;
     
@@ -211,98 +218,90 @@ public abstract class baseTeleOp extends OpMode {
         prevOptions   = gamepad1.options;
     }
 
-    // Intake, feeder and shooter. Holding a shoot button wins over everything else; holding
-    // circle (reverse) wins over loading and nudging.
+    // Intake, feeder and shooter. Every button is tap on / tap off. Shooting wins over everything
+    // else; circle (backwards) turns off loading and cross.
     private void handleBalls() {
-        boolean shootClose = gamepad1.triangle;
-        boolean shootFar   = gamepad1.square;
+        boolean triangle = gamepad1.triangle && !prevTriangle;
+        boolean square   = gamepad1.square && !prevSquare;
+        boolean cross    = gamepad1.cross && !prevCross;
+        boolean circle   = gamepad1.circle && !prevCircle;
+        prevTriangle = gamepad1.triangle;
+        prevSquare   = gamepad1.square;
+        prevCross    = gamepad1.cross;
+        prevCircle   = gamepad1.circle;
 
-        if (gamepad1.left_bumper && !prevLBumper) {
-            preSpin = !preSpin;
-            if (preSpin) shooter.spinTo(CLOSE_SHOT_VELOCITY);
-            else if (!shootClose && !shootFar) shooter.turnOff();
-        }
+        if (gamepad1.left_bumper && !prevLBumper) preSpin = !preSpin;
 
-        if (shootClose || shootFar) {
-            int target = shootFar ? FAR_SHOT_VELOCITY : CLOSE_SHOT_VELOCITY;
-            if (!shooting) {
-                shooting = true;
+        int wasShooting = shootMode;
+        if (triangle) shootMode = shootMode == SHOOT_CLOSE ? NOT_SHOOTING : SHOOT_CLOSE;
+        if (square)   shootMode = shootMode == SHOOT_FAR   ? NOT_SHOOTING : SHOOT_FAR;
+
+        if (shootMode != NOT_SHOOTING) {
+            int target = shootMode == SHOOT_FAR ? FAR_SHOT_VELOCITY : CLOSE_SHOT_VELOCITY;
+            if (wasShooting == NOT_SHOOTING) {
                 feedingShot = false;
-                loading = nudging = reversing = false;
-                supply.turnOff(); // nothing reaches the wheel before it is at speed
-                intake.stop();
+                loading = feedingUp = reversing = false;
             }
             shooter.spinTo(target);
 
             double vel = hwManager.shooterVelocity();
             if (!feedingShot && Math.abs(vel - target) < READY_TOLERANCE) {
                 feedingShot = true;
-                supply.turnOn(SHOT_FEED_VELOCITY);
-                intake.turnOn();
             } else if (feedingShot && vel < target - DROP_TOLERANCE) {
-                // a ball just took speed off the wheel: pause until it recovers
-                feedingShot = false;
-                supply.turnOff();
-                intake.turnOff();
+                feedingShot = false; // a ball just took speed off the wheel: pause until it recovers
             }
-            telemetry.addData("Shooter", "%.0f / %d  %s", vel, target, feedingShot ? "FEEDING" : "spinning up");
+            // nothing reaches the wheel before it is at speed
+            setFeeder(feedingShot ? SHOT_FEED_VELOCITY : 0);
+            setIntake(feedingShot ? 1 : 0);
+            telemetry.addData("Shooter", "%.0f / %d  %s  (tap again to stop)", vel, target,
+                    feedingShot ? "FEEDING" : "spinning up");
             return;
         }
 
-        if (shooting) {
-            shooting = false;
-            feedingShot = false;
-            supply.turnOff();
-            intake.stop();
-            if (preSpin) shooter.spinTo(CLOSE_SHOT_VELOCITY);
-            else shooter.turnOff();
+        if (wasShooting != NOT_SHOOTING) feedingShot = false;
+        if (preSpin) shooter.spinTo(CLOSE_SHOT_VELOCITY);
+        else shooter.turnOff();
+
+        if (gamepad1.right_bumper && !prevRBumper) {
+            loading = !loading;
+            if (loading) reversing = false;
+        }
+        if (cross) {
+            feedingUp = !feedingUp;
+            if (feedingUp) reversing = false;
+        }
+        if (circle) {
+            reversing = !reversing;
+            if (reversing) loading = feedingUp = false;
         }
 
-        // R1 toggles loading: intake (slow, spares its bands) + feeder at its own speed
-        if (gamepad1.right_bumper && !prevRBumper) loading = !loading;
-
-        // Hold circle: intake and feeder run backwards to pull a ball back down or spit it out
-        if (gamepad1.circle) {
-            if (!reversing) {
-                reversing = true;
-                loading = false;
-                intake.reverseOn();
-                supply.turnOff();
-                supply.turnOn(-NUDGE_VELOCITY);
-            }
-            return;
-        }
         if (reversing) {
-            reversing = false;
-            intake.stop();
-            supply.turnOff();
-        }
-
-        // Hold cross: feeder pushes up slowly, only while held
-        if (gamepad1.cross) {
-            if (!nudging) {
-                nudging = true;
-                supply.turnOff();
-                supply.turnOn(NUDGE_VELOCITY);
-            }
-        } else if (nudging) {
-            nudging = false;
-            supply.turnOff();
-        }
-
-        if (loading) {
-            intake.turnOn();
-            // stop the feeder once a ball is staged at the button sensor (if the robot has one)
-            if (!nudging) {
-                if (buttonPressed) supply.turnOff();
-                else supply.turnOn(supply.LOAD_VELOCITY);
-            }
-        } else if (intake.running) {
-            intake.turnOff();
-            if (!nudging) supply.turnOff();
+            setIntake(-1);
+            setFeeder(-REVERSE_VELOCITY);
+        } else {
+            setIntake(loading ? 1 : 0);
+            if (feedingUp)    setFeeder(FEED_UP_VELOCITY);
+            else if (loading) setFeeder(buttonPressed ? 0 : supply.LOAD_VELOCITY); // stops at the button sensor, if fitted
+            else              setFeeder(0);
         }
 
         telemetry.addData("Shooter", preSpin ? String.format("pre-spinning %.0f", hwManager.shooterVelocity()) : "off (L1 to pre-spin)");
+        telemetry.addData("Balls", reversing ? "BACKWARDS" : feedingUp ? "feeder pushing up" : loading ? "loading" : "stopped");
+    }
+
+    private void setFeeder(int velocity) {
+        if (velocity == lastFeeder) return;
+        lastFeeder = velocity;
+        supply.turnOff();
+        if (velocity != 0) supply.turnOn(velocity);
+    }
+
+    private void setIntake(int direction) {
+        if (direction == lastIntake) return;
+        lastIntake = direction;
+        if (direction > 0)      intake.turnOn();
+        else if (direction < 0) intake.reverseOn();
+        else                    intake.stop();
     }
 
     private double normalizeAngle(double angle) {
@@ -317,7 +316,9 @@ public abstract class baseTeleOp extends OpMode {
         shooter.turnOff();
         supply.turnOff();
         intake.stop();
-        loading = preSpin = shooting = feedingShot = nudging = reversing = false;
+        loading = preSpin = feedingShot = feedingUp = reversing = false;
+        shootMode = NOT_SHOOTING;
+        lastFeeder = lastIntake = 0;
         autoRotating      = false;
         headingHoldActive = false;
     }

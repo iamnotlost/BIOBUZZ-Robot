@@ -19,6 +19,11 @@ public class supply {
         if (hwManager.supply != null) hwManager.supply.setVelocity(velocity);
     }
 
+    // Changes the speed of a running feeder without stopping it
+    public void setSpeed(int velocity) {
+        if (running) setVelocity(velocity);
+    }
+
     public void turnOn() {
         if (running) return;
         setVelocity(1400);

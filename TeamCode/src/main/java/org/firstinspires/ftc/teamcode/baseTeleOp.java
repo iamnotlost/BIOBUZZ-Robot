@@ -164,6 +164,9 @@ public abstract class baseTeleOp extends OpMode {
         if (gamepad1.dpad_down && !prevDPadDown) drivetrain.adjustMaxSpeed(-1);
         if (gamepad2.dpad_up && !prevG2Up)       intake.adjustSpeed(1);
         if (gamepad2.dpad_down && !prevG2Down)   intake.adjustSpeed(-1);
+        if ((gamepad2.dpad_up && !prevG2Up) || (gamepad2.dpad_down && !prevG2Down)) {
+            if (intake.running) supply.setSpeed(intake.IN_VELOCITY); // feeder follows the intake while loading
+        }
         prevDPadUp   = gamepad1.dpad_up;
         prevDPadDown = gamepad1.dpad_down;
         prevG2Up     = gamepad2.dpad_up;
@@ -199,11 +202,16 @@ public abstract class baseTeleOp extends OpMode {
 
             if (crossPressed   && !prevCross)    supply.toggle();
             if (lBumperPressed && !prevLBumper)  shooter.shootCustom(cstSpeed);
-            if (circlePressed  && !prevCircle)   intake.toggleReverse();
+            if (circlePressed  && !prevCircle) {
+                intake.toggleReverse();
+                supply.turnOff(); // spitting out: don't keep pushing balls up
+            }
 
+            // R1 loads: intake + feeder together at the same speed, and a second press stops both
             if (rBumperPressed && !prevRBumper) {
                 intake.toggle();
-                if (!buttonPressed && intake.running) supply.turnOnSlow();
+                if (intake.running && !buttonPressed) supply.turnOn(intake.IN_VELOCITY);
+                else if (!intake.running) supply.turnOff();
             }
         }
 

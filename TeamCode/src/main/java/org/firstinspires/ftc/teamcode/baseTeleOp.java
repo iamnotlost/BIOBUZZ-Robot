@@ -16,7 +16,8 @@ public abstract class baseTeleOp extends OpMode {
 
     protected abstract Alliance alliance();
 
-    boolean prevCross, prevClose, prevFar;
+    boolean prevCross;
+    boolean prevDPadUp, prevDPadDown, prevG2Up, prevG2Down;
     boolean prevRBumper, prevLBumper;
     boolean prevDPadRight, prevDPadLeft;
     boolean prevOptions, prevTriangle, prevCircle, prevSquare;
@@ -91,6 +92,8 @@ public abstract class baseTeleOp extends OpMode {
         prevOpponentNectar = opponentNectar;
 
         telemetry.addData("Ball", opponentNectar ? "OPPONENT NECTAR - spit it out!" : hwManager.elementSensor.read());
+        telemetry.addData("Drive top speed", "%.0f%%  (gamepad 1 D-pad up/down)", drivetrain.MAX_SPEED * 100);
+        telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
         telemetry.addData("Missing", hwManager.missingText());
         telemetry.addData("Button Pressed", buttonPressed);
         telemetry.addData("Shooter velocity", hwManager.shooterVelocity());
@@ -99,9 +102,9 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Heading hold", headingHoldActive ? "ON (target " + Math.toDegrees(headingHoldRad) + " deg)" : "off");
         telemetry.update();
 
-        double x  = -gamepad1.left_stick_x;
-        double y  =  gamepad1.left_stick_y;
-        double rx = -gamepad1.right_stick_x;
+        double x  = -drivetrain.curve(gamepad1.left_stick_x)  * drivetrain.MAX_SPEED;
+        double y  =  drivetrain.curve(gamepad1.left_stick_y)  * drivetrain.MAX_SPEED;
+        double rx = -drivetrain.curve(gamepad1.right_stick_x) * drivetrain.TURN_SPEED;
 
         boolean slowMode  = gamepad1.right_trigger > 0.05;
         boolean superSlow = gamepad1.left_trigger  > 0.05;
@@ -156,9 +159,17 @@ public abstract class baseTeleOp extends OpMode {
             headingHoldDelayTimer.reset();
         }
 
+        // Live tuning: gamepad 1 D-pad up/down = drive top speed, gamepad 2 D-pad up/down = intake speed
+        if (gamepad1.dpad_up && !prevDPadUp)     drivetrain.adjustMaxSpeed(1);
+        if (gamepad1.dpad_down && !prevDPadDown) drivetrain.adjustMaxSpeed(-1);
+        if (gamepad2.dpad_up && !prevG2Up)       intake.adjustSpeed(1);
+        if (gamepad2.dpad_down && !prevG2Down)   intake.adjustSpeed(-1);
+        prevDPadUp   = gamepad1.dpad_up;
+        prevDPadDown = gamepad1.dpad_down;
+        prevG2Up     = gamepad2.dpad_up;
+        prevG2Down   = gamepad2.dpad_down;
+
         boolean crossPressed     = gamepad1.cross;
-//        boolean closePressed     = gamepad1.dpad_up;
-//        boolean farPressed       = gamepad1.dpad_down;
         boolean rBumperPressed   = gamepad1.right_bumper;
         boolean lBumperPressed   = gamepad1.left_bumper;
         boolean dpadRightPressed = gamepad1.dpad_right;
@@ -187,8 +198,6 @@ public abstract class baseTeleOp extends OpMode {
             if (squarePressed   && !prevSquare)   startSendAllFar();
 
             if (crossPressed   && !prevCross)    supply.toggle();
-//            if (closePressed   && !prevClose)    shooter.shootClose();
-//            if (farPressed     && !prevFar)      shooter.shootFar();
             if (lBumperPressed && !prevLBumper)  shooter.shootCustom(cstSpeed);
             if (circlePressed  && !prevCircle)   intake.toggleReverse();
 
@@ -201,8 +210,6 @@ public abstract class baseTeleOp extends OpMode {
         supply.stopOnButton(buttonPressed && shooter.currentMode == 0);
 
         prevCross        = crossPressed;
-//        prevClose        = closePressed;
-//        prevFar          = farPressed;
         prevRBumper      = rBumperPressed;
         prevLBumper      = lBumperPressed;
         prevDPadRight    = dpadRightPressed;
@@ -402,7 +409,7 @@ public abstract class baseTeleOp extends OpMode {
 
     // G404: everything unpowered once TELEOP is over
     private void stopAll() {
-        drivetrain.drive(0, 0, 0);
+        drivetrain.stop();
         stopSendAll();
         intake.stop();
         autoRotating      = false;

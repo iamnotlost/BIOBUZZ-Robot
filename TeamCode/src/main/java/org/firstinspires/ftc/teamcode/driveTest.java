@@ -46,9 +46,9 @@ public class driveTest extends OpMode {
         else if (gamepad1.dpad_down)  wheelTest = spinOnly(hwManager.backRight, "backRight");
         else if (gamepad1.dpad_left)  wheelTest = spinOnly(hwManager.backLeft, "backLeft");
         else {
-            double x  = -gamepad1.left_stick_x;
-            double y  =  gamepad1.left_stick_y;
-            double rx = -gamepad1.right_stick_x;
+            double x  = -drivetrain.curve(gamepad1.left_stick_x)  * drivetrain.MAX_SPEED;
+            double y  =  drivetrain.curve(gamepad1.left_stick_y)  * drivetrain.MAX_SPEED;
+            double rx = -drivetrain.curve(gamepad1.right_stick_x) * drivetrain.TURN_SPEED;
 
             double speedMult = gamepad1.left_trigger > 0.05 ? 0.25 : gamepad1.right_trigger > 0.05 ? 0.5 : 1.0;
 

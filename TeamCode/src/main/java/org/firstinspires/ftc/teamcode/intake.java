@@ -2,13 +2,24 @@ package org.firstinspires.ftc.teamcode;
 public class intake {
     hwManager hwManager;
 
-    public static int IN_VELOCITY  = 2000;
-    public static int OUT_VELOCITY = -1000;
+    // Ticks/s. Adjustable while driving (gamepad 2 D-pad up/down); the value shows on telemetry
+    public static int IN_VELOCITY  = 800;
+    public static int OUT_VELOCITY = -600;
+    public static final int SPEED_STEP = 100;
+    public static final int MIN_SPEED  = 100;
+    public static final int MAX_SPEED  = 2500;
 
     public boolean running = false;
     boolean reverse = false;
     public intake(hwManager hwManager) {
         this.hwManager = hwManager;
+    }
+    // Changes both directions by the same step and applies it right away if the intake is running
+    public void adjustSpeed(int steps) {
+        IN_VELOCITY = Math.max(MIN_SPEED, Math.min(MAX_SPEED, IN_VELOCITY + steps * SPEED_STEP));
+        OUT_VELOCITY = -Math.max(MIN_SPEED, Math.min(MAX_SPEED, -OUT_VELOCITY + steps * SPEED_STEP));
+        if (running) setVelocity(IN_VELOCITY);
+        if (reverse) setVelocity(OUT_VELOCITY);
     }
     private void setVelocity(int velocity) {
         if (hwManager.intake != null) hwManager.intake.setVelocity(velocity);

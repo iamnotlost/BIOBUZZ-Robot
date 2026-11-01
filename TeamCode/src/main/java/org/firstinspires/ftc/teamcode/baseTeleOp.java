@@ -21,9 +21,11 @@ public abstract class baseTeleOp extends OpMode {
     boolean prevOptions;
     boolean prevTriangle, prevSquare, prevCross, prevCircle;
 
-    // Shooting: tap triangle (close) or square (far) to start, tap again to stop. The wheel spins up
-    // first and the feeder only pushes a ball in while the wheel is at speed, so every ball leaves at
-    // full speed.
+    // Shooting: tap triangle (close) or square (far) to start, tap again to stop.
+    //   1. back off: feeder runs backwards briefly so no ball is pressed against the wheel
+    //   2. spin up: the wheel speeds up with nothing touching it
+    //   3. feed: the feeder pushes balls in only while the wheel is at speed, pausing after each ball
+    public static double BACK_OFF_SECONDS = 0.3;
     public static int CLOSE_SHOT_VELOCITY = 1320;
     public static int FAR_SHOT_VELOCITY   = 1860;
     public static int SHOT_FEED_VELOCITY  = 1500;
@@ -40,6 +42,7 @@ public abstract class baseTeleOp extends OpMode {
     boolean feedingUp = false;    // cross
     boolean reversing = false;    // circle
     boolean feedingShot = false;
+    private final ElapsedTime shotTimer = new ElapsedTime();
     // last speeds sent, so motors are only told when something changes
     private int lastFeeder = 0;
     private int lastIntake = 0;   // 1 in, -1 out, 0 stopped
@@ -241,10 +244,18 @@ public abstract class baseTeleOp extends OpMode {
             if (wasShooting == NOT_SHOOTING) {
                 feedingShot = false;
                 loading = feedingUp = reversing = false;
+                shotTimer.reset();
             }
             shooter.spinTo(target);
 
             double vel = hwManager.shooterVelocity();
+            if (shotTimer.seconds() < BACK_OFF_SECONDS) {
+                // step 1: pull any ball off the wheel so it can spin up freely
+                setFeeder(-REVERSE_VELOCITY);
+                setIntake(0);
+                telemetry.addData("Shooter", "%.0f / %d  backing ball off", vel, target);
+                return;
+            }
             if (!feedingShot && Math.abs(vel - target) < READY_TOLERANCE) {
                 feedingShot = true;
             } else if (feedingShot && vel < target - DROP_TOLERANCE) {

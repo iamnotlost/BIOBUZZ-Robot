@@ -8,7 +8,7 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 public class matchTimer {
     public static final double TELEOP_SECONDS        = 120;
     public static final double NECTAR_FLOWER_SECONDS = 60;   // G410: NECTAR into FLOWERS only in the last 60 s
-    public static final double FINAL_SECONDS         = 20;
+    public static final double PARK_SECONDS          = 15;   // time to head for the LOADING ZONE (PARK = 5 pts)
 
     // G404: no powered movement after the match ends. Set false to practice without the 2:00 cutoff.
     public static boolean ENFORCE_MATCH_END = true;
@@ -16,13 +16,13 @@ public class matchTimer {
     private final ElapsedTime timer = new ElapsedTime();
     private boolean started = false;
     private boolean nectarWarned = false;
-    private boolean finalWarned = false;
+    private boolean parkWarned = false;
 
     public void start() {
         timer.reset();
         started = true;
         nectarWarned = false;
-        finalWarned = false;
+        parkWarned = false;
     }
 
     public double remaining() {
@@ -34,20 +34,25 @@ public class matchTimer {
         return started && remaining() <= NECTAR_FLOWER_SECONDS;
     }
 
+    public boolean parkTime() {
+        return started && remaining() <= PARK_SECONDS;
+    }
+
     public boolean isOver() {
         return ENFORCE_MATCH_END && started && remaining() <= 0;
     }
 
-    // Rumbles the gamepads once at 1:00 left (NECTAR can go into FLOWERS) and once at 0:20 left
+    // Rumbles the gamepads: 2 short buzzes at 1:00 left (NECTAR can go into FLOWERS),
+    // one long buzz at 0:15 left (go park)
     public void update(Gamepad... gamepads) {
         if (!started) return;
         if (!nectarWarned && remaining() <= NECTAR_FLOWER_SECONDS) {
             nectarWarned = true;
             for (Gamepad g : gamepads) g.rumbleBlips(2);
         }
-        if (!finalWarned && remaining() <= FINAL_SECONDS) {
-            finalWarned = true;
-            for (Gamepad g : gamepads) g.rumbleBlips(3);
+        if (!parkWarned && remaining() <= PARK_SECONDS) {
+            parkWarned = true;
+            for (Gamepad g : gamepads) g.rumble(1000);
         }
     }
 

@@ -29,9 +29,15 @@ public class drivetrain {
         hwManager.resetHeading();
     }
 
-    // Squares the stick so small pushes are gentle while a full push still reaches 1
+    // Sticks closer to center than this count as zero, so a light touch or a worn stick doesn't creep
+    public static double STICK_DEAD_ZONE = 0.06;
+
+    // Dead zone, then squared so small pushes are gentle while a full push still reaches 1
     public static double curve(double stick) {
-        return stick * Math.abs(stick);
+        double a = Math.abs(stick);
+        if (a < STICK_DEAD_ZONE) return 0;
+        double scaled = (a - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE);
+        return Math.signum(stick) * scaled * scaled;
     }
 
     public static void adjustMaxSpeed(int steps) {

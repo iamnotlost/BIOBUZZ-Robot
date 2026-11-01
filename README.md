@@ -40,7 +40,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Left stick | Drive. Robot-centric by default: forward = where the robot faces |
 | Click left stick | Switch between robot-centric and field-centric (forward = away from you) |
 | Right stick X | Turn |
-| Right / left trigger | Half / quarter speed |
+| Either trigger | Slow down gradually: the harder you squeeze, the slower (down to 25%) |
 | Options | Reset heading (point the robot away from you first) |
 | Share | Heading hold on/off (gently keeps the robot pointing the same way when you let go of turning) |
 | Right bumper (R1) | Load on/off: intake (slow) + feeder carry balls up toward the shooter (they stop at the button sensor if the robot has one) |
@@ -49,7 +49,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Triangle | Shoot (close) on/off: the wheel spins up first, then the feeder pushes balls in only while the wheel is at full speed |
 | Square | Shoot (far) on/off, same as triangle |
 | Left bumper (L1) | Pre-spin the shooter on/off, so triangle fires instantly |
-| D-pad left/right | Turn to a preset angle |
+| D-pad left/right | Turn-to-angle presets, switched off until set for the HIVE (`PRESET_TURNS_ENABLED`) |
 | D-pad up/down | Drive top speed up/down (starts at 40%) |
 | Gamepad 2 D-pad up/down | Intake speed up/down (starts at 300) |
 
@@ -57,8 +57,9 @@ Driving is softened on purpose: small stick pushes move the robot gently, and it
 half a second (by time, not loop speed) instead of jerking. Speed changes made with the D-pad last until the robot app restarts;
 to make one permanent, change `MAX_SPEED` in `drivetrain.java` or `IN_VELOCITY` in `intake.java`.
 
-Gamepads rumble at 1:00 left (NECTAR may go into FLOWERS) and 0:20 left, and the robot stops
-at 0:00. A long rumble means the color sensor sees the other alliance's NECTAR – spit it out.
+Gamepads rumble: 2 short buzzes at 1:00 left (NECTAR may go into FLOWERS), one long buzz at 0:15
+left (go park in the LOADING ZONE), and a short buzz when the shooter is ready (L1) or starts
+shooting. The robot stops at 0:00. A long rumble means the color sensor sees the other alliance's NECTAR – spit it out.
 For practice longer than 2:00, set `matchTimer.ENFORCE_MATCH_END = false`.
 
 ## Code layout

@@ -57,6 +57,16 @@ public abstract class baseTeleOp extends OpMode {
     boolean buttonPressed = false;
     boolean prevOpponentNectar = false;
     
+    // Slowest speed when a trigger is squeezed all the way
+    public static double MIN_TRIGGER_SPEED = 0.25;
+    // D-pad left/right turn-to-angle presets: off until the angles are set for the HIVE
+    public static boolean PRESET_TURNS_ENABLED = false;
+
+    // What the driver screen shows about balls and the shooter (set in handleBalls)
+    private String shooterStatus = "";
+    private String ballStatus = "";
+    private boolean readyRumbled = false;
+
     boolean autoRotating = false;
     // Red angles; blue mirrors them via Alliance.sign
     private static final double TARGET_HEADING_FAR_DEG = 68.5;
@@ -119,33 +129,17 @@ public abstract class baseTeleOp extends OpMode {
         shooter.update();
         buttonPressed = hwManager.buttonPressed();
 
-        telemetry.addData("Time left", matchTimer.display());
-        telemetry.addData("NECTAR -> FLOWER", matchTimer.nectarFlowerAllowed() ? "ALLOWED" : "not yet");
         boolean opponentNectar = hwManager.elementSensor.isOpponentNectar(alliance());
         if (opponentNectar && !prevOpponentNectar) gamepad1.rumble(500);
         prevOpponentNectar = opponentNectar;
-
-        telemetry.addData("Ball", opponentNectar ? "OPPONENT NECTAR - spit it out!" : hwManager.elementSensor.read());
-        telemetry.addData("Driving", fieldCentric ? "FIELD-centric (forward = away from you)  - click left stick to switch"
-                : "ROBOT-centric (forward = where the robot faces)  - click left stick to switch");
-        telemetry.addData("Drive top speed", "%.0f%%  (gamepad 1 D-pad up/down)", drivetrain.MAX_SPEED * 100);
-        telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
-        telemetry.addData("Missing", hwManager.missingText());
-        telemetry.addData("Button Pressed", buttonPressed);
-        telemetry.addData("Shooter velocity", hwManager.shooterVelocity());
-        telemetry.addData("Heading (deg)", Math.toDegrees(hwManager.getHeading()));
-        telemetry.addData("Auto-rotate", autoRotating ? "ON (target " + Math.toDegrees(currentTargetHeading) + " deg)" : "off");
-        telemetry.addData("Heading hold", !headingHoldEnabled ? "OFF (Share to turn on)"
-                : headingHoldActive ? String.format("holding %.0f deg (Share to turn off)", Math.toDegrees(headingHoldRad)) : "on");
 
         double x  = -drivetrain.curve(gamepad1.left_stick_x)  * drivetrain.MAX_SPEED;
         double y  =  drivetrain.curve(gamepad1.left_stick_y)  * drivetrain.MAX_SPEED;
         double rx = -drivetrain.curve(gamepad1.right_stick_x) * drivetrain.TURN_SPEED;
 
-        boolean slowMode  = gamepad1.right_trigger > 0.05;
-        boolean superSlow = gamepad1.left_trigger  > 0.05;
-
-        double speedMult = superSlow ? 0.25 : slowMode ? 0.5 : 1.0;
+        // Squeeze either trigger to slow down gradually: the harder you squeeze, the slower (down to 25%)
+        double squeeze = Math.max(gamepad1.left_trigger, gamepad1.right_trigger);
+        double speedMult = 1.0 - (1.0 - MIN_TRIGGER_SPEED) * squeeze;
 
         if (autoRotating && Math.abs(gamepad1.right_stick_x) > CANCEL_STICK_THRESH) {
             autoRotating = false;
@@ -218,17 +212,17 @@ public abstract class baseTeleOp extends OpMode {
         prevG2Up     = gamepad2.dpad_up;
         prevG2Down   = gamepad2.dpad_down;
 
-        if (gamepad1.dpad_right && !prevDPadRight) {
+        if (PRESET_TURNS_ENABLED && gamepad1.dpad_right && !prevDPadRight) {
             currentTargetHeading = targetHeadingFarRad;
             autoRotating = true;
         }
-        if (gamepad1.dpad_left && !prevDPadLeft) {
+        if (PRESET_TURNS_ENABLED && gamepad1.dpad_left && !prevDPadLeft) {
             currentTargetHeading = targetHeading45Rad;
             autoRotating = true;
         }
 
         handleBalls();
-        telemetry.update();
+        showDriverScreen();
 
         prevRBumper   = gamepad1.right_bumper;
         prevLBumper   = gamepad1.left_bumper;
@@ -263,6 +257,7 @@ public abstract class baseTeleOp extends OpMode {
                 shotTimer.reset();
             }
             shooter.spinTo(target);
+            ballStatus = "going into the shooter";
 
             double vel = hwManager.shooterVelocity();
             if (shotTimer.seconds() < BACK_OFF_SECONDS) {
@@ -271,13 +266,14 @@ public abstract class baseTeleOp extends OpMode {
                 setIntake(0);
                 waitTimer.reset();
                 firstBall = true;
-                telemetry.addData("Shooter", "%.0f / %d  backing ball off", vel, target);
+                shooterStatus = "backing balls off";
                 return;
             }
             // step 2: wait until the wheel is (nearly) at speed, or give up waiting after a time limit
             boolean ready = vel >= target - READY_TOLERANCE;
             double waitLimit = firstBall ? SPINUP_TIMEOUT_SECONDS : RECOVER_TIMEOUT_SECONDS;
             if (!feedingShot && (ready || waitTimer.seconds() >= waitLimit)) {
+                if (firstBall) gamepad1.rumble(200); // short buzz: the first ball is going in
                 feedingShot = true;
                 firstBall = false;
                 feedStartVelocity = vel;
@@ -290,8 +286,8 @@ public abstract class baseTeleOp extends OpMode {
             // nothing reaches the wheel before it is at speed
             setFeeder(feedingShot ? SHOT_FEED_VELOCITY : 0);
             setIntake(feedingShot ? 1 : 0);
-            telemetry.addData("Shooter", "%.0f / %d  %s  (tap again to stop)", vel, target,
-                    feedingShot ? "FEEDING" : "spinning up");
+            shooterStatus = String.format("%s  %.0f / %d  (tap %s again to stop)",
+                    feedingShot ? "SHOOTING" : "spinning up", vel, target, shootMode == SHOOT_FAR ? "square" : "triangle");
             return;
         }
 
@@ -322,8 +318,34 @@ public abstract class baseTeleOp extends OpMode {
             else              setFeeder(0);
         }
 
-        telemetry.addData("Shooter", preSpin ? String.format("pre-spinning %.0f", hwManager.shooterVelocity()) : "off (L1 to pre-spin)");
-        telemetry.addData("Balls", reversing ? "BACKWARDS" : feedingUp ? "feeder pushing up" : loading ? "loading" : "stopped");
+        if (preSpin) {
+            double vel = hwManager.shooterVelocity();
+            boolean ready = vel >= CLOSE_SHOT_VELOCITY - READY_TOLERANCE;
+            if (ready && !readyRumbled) gamepad1.rumble(200); // short buzz: wheel is up to speed
+            readyRumbled = ready || readyRumbled;
+            shooterStatus = ready ? "READY - tap triangle" : String.format("pre-spinning %.0f / %d", vel, CLOSE_SHOT_VELOCITY);
+        } else {
+            readyRumbled = false;
+            shooterStatus = "off";
+        }
+        ballStatus = reversing ? "BACKWARDS (circle to stop)" : feedingUp ? "pushing up (cross to stop)"
+                : loading ? "loading (R1 to stop)" : "stopped";
+    }
+
+    // Only what a driver needs during a match
+    private void showDriverScreen() {
+        String time = matchTimer.display();
+        if (matchTimer.parkTime())                time += "   GO PARK in the LOADING ZONE";
+        else if (matchTimer.nectarFlowerAllowed()) time += "   NECTAR into FLOWERS allowed";
+        telemetry.addData("Time", time);
+        telemetry.addData("Shooter", shooterStatus);
+        telemetry.addData("Balls", ballStatus);
+        if (prevOpponentNectar) telemetry.addData("!!", "OPPONENT NECTAR - tap circle to spit it out");
+        telemetry.addData("Driving", "%s, top speed %.0f%%  (L-stick click / D-pad)",
+                fieldCentric ? "FIELD-centric" : "ROBOT-centric", drivetrain.MAX_SPEED * 100);
+        telemetry.addData("Heading hold", headingHoldEnabled ? "on (Share)" : "off (Share)");
+        if (!hwManager.missing.isEmpty()) telemetry.addData("Not found", hwManager.missingText());
+        telemetry.update();
     }
 
     private void setFeeder(int velocity) {

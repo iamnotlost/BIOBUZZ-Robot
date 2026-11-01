@@ -23,6 +23,7 @@ public class hardwareTest extends OpMode {
     private final List<String> names = new ArrayList<>();
     private int selected = 0;
     private double servoPosition = 0.5;
+    private boolean servoArmed = false;
     private boolean prevUp, prevDown;
 
     @Override
@@ -77,11 +78,15 @@ public class hardwareTest extends OpMode {
             telemetry.addData("Power", "%.2f", stick);
         } else if (device instanceof Servo) {
             Servo servo = (Servo) device;
-            if (gamepad1.triangle) servoPosition = 0.5;
-            servoPosition = Math.max(0, Math.min(1, servoPosition + stick * 0.01));
-            servo.setPosition(servoPosition);
+            // A servo is only commanded once you touch the stick or triangle, so selecting one never moves it
+            if (gamepad1.triangle || Math.abs(stick) > 0.1) servoArmed = true;
+            if (servoArmed) {
+                if (gamepad1.triangle) servoPosition = 0.5;
+                servoPosition = Math.max(0, Math.min(1, servoPosition + stick * 0.01));
+                servo.setPosition(servoPosition);
+            }
             telemetry.addData("Type", "servo (port " + servo.getPortNumber() + ")");
-            telemetry.addData("Position", "%.3f", servoPosition);
+            telemetry.addData("Position", servoArmed ? String.format("%.3f", servoPosition) : "not moved yet");
         }
 
         telemetry.addData("Selected", "%s  (%d of %d)", names.get(selected), selected + 1, devices.size());
@@ -107,6 +112,7 @@ public class hardwareTest extends OpMode {
         if (old instanceof DcMotorEx) ((DcMotorEx) old).setPower(0);
         if (old instanceof CRServo) ((CRServo) old).setPower(0);
         selected = (index + devices.size()) % devices.size();
+        servoArmed = false;
         if (devices.get(selected) instanceof Servo) {
             servoPosition = ((Servo) devices.get(selected)).getPosition();
             if (Double.isNaN(servoPosition)) servoPosition = 0.5;

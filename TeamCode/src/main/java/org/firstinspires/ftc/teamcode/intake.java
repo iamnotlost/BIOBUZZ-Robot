@@ -3,8 +3,8 @@ public class intake {
     hwManager hwManager;
 
     // Ticks/s. Adjustable while driving (gamepad 2 D-pad up/down); the value shows on telemetry
-    public static int IN_VELOCITY  = 800;
-    public static int OUT_VELOCITY = -600;
+    public static int IN_VELOCITY  = 500;
+    public static int OUT_VELOCITY = -400;
     public static final int SPEED_STEP = 100;
     public static final int MIN_SPEED  = 100;
     public static final int MAX_SPEED  = 2500;

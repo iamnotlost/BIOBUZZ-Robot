@@ -47,8 +47,8 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Left bumper | Launcher on/off |
 | Triangle / square | Launch everything (close / far) |
 | D-pad left/right | Turn to a preset angle |
-| D-pad up/down | Drive top speed up/down (starts at 60%) |
-| Gamepad 2 D-pad up/down | Intake speed up/down (starts at 800) |
+| D-pad up/down | Drive top speed up/down (starts at 40%) |
+| Gamepad 2 D-pad up/down | Intake speed up/down (starts at 500) |
 
 Driving is softened on purpose: small stick pushes move the robot gently, and it speeds up over about
 half a second instead of jerking. Speed changes made with the D-pad last until the robot app restarts;

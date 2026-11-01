@@ -37,7 +37,8 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 
 | Control | Action |
 |---|---|
-| Left stick | Drive (field-centric) |
+| Left stick | Drive. Robot-centric by default: forward = where the robot faces |
+| Click left stick | Switch between robot-centric and field-centric (forward = away from you) |
 | Right stick X | Turn |
 | Right / left trigger | Half / quarter speed |
 | Options | Reset heading (point the robot away from you first) |

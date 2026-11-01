@@ -19,6 +19,8 @@ public abstract class baseTeleOp extends OpMode {
     boolean prevRBumper, prevLBumper;
     boolean prevDPadRight, prevDPadLeft;
     boolean prevOptions;
+    boolean fieldCentric = false;
+    boolean prevLeftStickButton;
     boolean prevTriangle, prevSquare, prevCross, prevCircle;
 
     // Shooting: tap triangle (close) or square (far) to start, tap again to stop.
@@ -124,6 +126,8 @@ public abstract class baseTeleOp extends OpMode {
         prevOpponentNectar = opponentNectar;
 
         telemetry.addData("Ball", opponentNectar ? "OPPONENT NECTAR - spit it out!" : hwManager.elementSensor.read());
+        telemetry.addData("Driving", fieldCentric ? "FIELD-centric (forward = away from you)  - click left stick to switch"
+                : "ROBOT-centric (forward = where the robot faces)  - click left stick to switch");
         telemetry.addData("Drive top speed", "%.0f%%  (gamepad 1 D-pad up/down)", drivetrain.MAX_SPEED * 100);
         telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
         telemetry.addData("Missing", hwManager.missingText());
@@ -182,7 +186,13 @@ public abstract class baseTeleOp extends OpMode {
             }
         }
 
-        drivetrain.drive(x * speedMult, y * speedMult, driveRx);
+        // Click the left stick to switch: robot-centric (forward = where the robot faces, the default)
+        // or field-centric (forward = away from the driver, whichever way the robot faces)
+        if (gamepad1.left_stick_button && !prevLeftStickButton) fieldCentric = !fieldCentric;
+        prevLeftStickButton = gamepad1.left_stick_button;
+
+        if (fieldCentric) drivetrain.drive(x * speedMult, y * speedMult, driveRx);
+        else              drivetrain.driveRobotCentric(x * speedMult, y * speedMult, driveRx);
 
         if (gamepad1.options && !prevOptions) {
             drivetrain.resetYaw();

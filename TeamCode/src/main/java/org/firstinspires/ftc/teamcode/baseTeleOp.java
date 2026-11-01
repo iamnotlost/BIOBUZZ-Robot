@@ -32,8 +32,11 @@ public abstract class baseTeleOp extends OpMode {
     // Feeder speed for cross (push balls up) and circle (backwards)
     public static int FEED_UP_VELOCITY    = 1400;
     public static int REVERSE_VELOCITY    = 800;
-    private static final double READY_TOLERANCE = 80;   // within this of the target = ready to feed
+    private static final double READY_TOLERANCE = 80;   // at least target minus this = ready to feed
     private static final double DROP_TOLERANCE  = 150;  // this far below = a ball just went through, wait
+    // If the wheel never quite reaches its target, feed anyway after these times
+    public static double SPINUP_TIMEOUT_SECONDS  = 1.5;
+    public static double RECOVER_TIMEOUT_SECONDS = 0.6;
 
     private static final int NOT_SHOOTING = 0, SHOOT_CLOSE = 1, SHOOT_FAR = 2;
     int shootMode = NOT_SHOOTING; // triangle / square
@@ -43,6 +46,9 @@ public abstract class baseTeleOp extends OpMode {
     boolean reversing = false;    // circle
     boolean feedingShot = false;
     private final ElapsedTime shotTimer = new ElapsedTime();
+    private final ElapsedTime waitTimer = new ElapsedTime();
+    private boolean firstBall = true;
+    private double feedStartVelocity = 0;
     // last speeds sent, so motors are only told when something changes
     private int lastFeeder = 0;
     private int lastIntake = 0;   // 1 in, -1 out, 0 stopped
@@ -253,13 +259,23 @@ public abstract class baseTeleOp extends OpMode {
                 // step 1: pull any ball off the wheel so it can spin up freely
                 setFeeder(-REVERSE_VELOCITY);
                 setIntake(0);
+                waitTimer.reset();
+                firstBall = true;
                 telemetry.addData("Shooter", "%.0f / %d  backing ball off", vel, target);
                 return;
             }
-            if (!feedingShot && Math.abs(vel - target) < READY_TOLERANCE) {
+            // step 2: wait until the wheel is (nearly) at speed, or give up waiting after a time limit
+            boolean ready = vel >= target - READY_TOLERANCE;
+            double waitLimit = firstBall ? SPINUP_TIMEOUT_SECONDS : RECOVER_TIMEOUT_SECONDS;
+            if (!feedingShot && (ready || waitTimer.seconds() >= waitLimit)) {
                 feedingShot = true;
-            } else if (feedingShot && vel < target - DROP_TOLERANCE) {
-                feedingShot = false; // a ball just took speed off the wheel: pause until it recovers
+                firstBall = false;
+                feedStartVelocity = vel;
+                waitTimer.reset();
+            } else if (feedingShot && waitTimer.seconds() > 0.15 && vel < feedStartVelocity - DROP_TOLERANCE) {
+                // step 3 pause: a ball just took speed off the wheel, let it recover before the next one
+                feedingShot = false;
+                waitTimer.reset();
             }
             // nothing reaches the wheel before it is at speed
             setFeeder(feedingShot ? SHOT_FEED_VELOCITY : 0);

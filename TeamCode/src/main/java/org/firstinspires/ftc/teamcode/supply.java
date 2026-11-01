@@ -19,10 +19,9 @@ public class supply {
         if (hwManager.supply != null) hwManager.supply.setVelocity(velocity);
     }
 
-    // Changes the speed of a running feeder without stopping it
-    public void setSpeed(int velocity) {
-        if (running) setVelocity(velocity);
-    }
+    // Ticks/s while loading with R1: fast enough to carry balls all the way up to the shooter.
+    // Separate from the intake speed, which stays low to spare the intake's rubber bands
+    public static int LOAD_VELOCITY = 1000;
 
     public void turnOn() {
         if (running) return;

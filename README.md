@@ -43,7 +43,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Either trigger | Slow down gradually: the harder you squeeze, the slower (down to 25%) |
 | Options | Reset heading (point the robot away from you first) |
 | Share | Heading hold on/off (gently keeps the robot pointing the same way when you let go of turning) |
-| Right bumper (R1) | Load on/off: intake (slow) + feeder carry balls up toward the shooter (they stop at the button sensor if the robot has one) |
+| Right bumper (R1) | Load on/off: intake only (slow); the feeder stays still so balls settle where it grips them |
 | Cross | Feeder pushes balls up on/off |
 | Circle | Intake and feeder backwards on/off (pull a ball back down / spit it out) |
 | Triangle | Shoot (close) on/off: the wheel spins up first, then the feeder pushes balls in only while the wheel is at full speed |

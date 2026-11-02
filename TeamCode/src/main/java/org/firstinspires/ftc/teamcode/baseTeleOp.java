@@ -27,7 +27,11 @@ public abstract class baseTeleOp extends OpMode {
     //   1. back off: feeder runs backwards briefly so no ball is pressed against the wheel
     //   2. spin up: the wheel speeds up with nothing touching it
     //   3. feed: the feeder pushes balls in only while the wheel is at speed, pausing after each ball
-    public static double BACK_OFF_SECONDS = 0.3;
+    // 0 = no back-off: balls are no longer pushed against the wheel while loading, and backing off
+    // could knock a ball out of place. Raise (e.g. 0.3) if a ball ever sits against the wheel.
+    public static double BACK_OFF_SECONDS = 0;
+    // Feeder speed while R1 loads; 0 = feeder still so balls settle in place
+    public static int FEED_WHILE_LOADING = 0;
     public static int CLOSE_SHOT_VELOCITY = 1320;
     public static int FAR_SHOT_VELOCITY   = 1860;
     public static int SHOT_FEED_VELOCITY  = 1500;
@@ -314,7 +318,9 @@ public abstract class baseTeleOp extends OpMode {
         } else {
             setIntake(loading ? 1 : 0);
             if (feedingUp)    setFeeder(FEED_UP_VELOCITY);
-            else if (loading) setFeeder(buttonPressed ? 0 : supply.LOAD_VELOCITY); // stops at the button sensor, if fitted
+            // While loading the feeder stays still, so a ball can roll in and settle where the feeder grips it.
+            // A spinning feeder knocks incoming balls out of place.
+            else if (loading) setFeeder(FEED_WHILE_LOADING);
             else              setFeeder(0);
         }
 

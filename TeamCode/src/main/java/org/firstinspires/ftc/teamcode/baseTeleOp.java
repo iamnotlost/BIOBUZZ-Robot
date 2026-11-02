@@ -123,6 +123,14 @@ public abstract class baseTeleOp extends OpMode {
         hwManager.update();
         matchTimer.update(gamepad1, gamepad2);
 
+        // Without a heading (Pinpoint lost and no IMU), only robot-centric driving works
+        if (!hwManager.hasHeading()) {
+            fieldCentric = false;
+            headingHoldEnabled = false;
+            headingHoldActive = false;
+            autoRotating = false;
+        }
+
         if (matchTimer.isOver()) {
             stopAll();
             telemetry.addData("Match", "OVER - press STOP");
@@ -186,7 +194,7 @@ public abstract class baseTeleOp extends OpMode {
 
         // Click the left stick to switch: robot-centric (forward = where the robot faces, the default)
         // or field-centric (forward = away from the driver, whichever way the robot faces)
-        if (gamepad1.left_stick_button && !prevLeftStickButton) fieldCentric = !fieldCentric;
+        if (gamepad1.left_stick_button && !prevLeftStickButton && hwManager.hasHeading()) fieldCentric = !fieldCentric;
         prevLeftStickButton = gamepad1.left_stick_button;
 
         if (fieldCentric) drivetrain.drive(x * speedMult, y * speedMult, driveRx);
@@ -199,7 +207,7 @@ public abstract class baseTeleOp extends OpMode {
             headingHoldDelayTimer.reset();
         }
 
-        if (gamepad1.share && !prevShare) {
+        if (gamepad1.share && !prevShare && hwManager.hasHeading()) {
             headingHoldEnabled = !headingHoldEnabled;
             headingHoldActive = false;
             headingHoldDelayTimer.reset();
@@ -346,6 +354,8 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Time", time);
         telemetry.addData("Shooter", shooterStatus);
         telemetry.addData("Balls", ballStatus);
+        telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
+        if (hwManager.pinpointFailed) telemetry.addData("!!", "Pinpoint lost - check its cable. Robot-centric only until restart");
         if (prevOpponentNectar) telemetry.addData("!!", "OPPONENT NECTAR - tap circle to spit it out");
         telemetry.addData("Driving", "%s, top speed %.0f%%  (L-stick click / D-pad)",
                 fieldCentric ? "FIELD-centric" : "ROBOT-centric", drivetrain.MAX_SPEED * 100);

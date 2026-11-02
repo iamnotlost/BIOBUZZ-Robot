@@ -122,20 +122,42 @@ public class hwManager {
         return motor;
     }
 
+    // The Pinpoint talks over an I2C cable. If that bus gets stuck (loose or damaged cable, motor noise),
+    // every read waits for a timeout and the whole robot freezes. So after a failed read, or several slow
+    // ones in a row, we stop talking to it for the rest of the run and drive without it.
+    public boolean pinpointFailed = false;
+    private static final double PINPOINT_SLOW_MS = 40;   // a normal read takes a few ms
+    private static final int    PINPOINT_MAX_SLOW = 3;
+    private int pinpointSlowReads = 0;
+
     // Call once per loop
     public void update() {
-        if (pinpoint != null) pinpoint.update();
+        if (pinpoint == null || pinpointFailed) return;
+        long start = System.nanoTime();
+        try {
+            pinpoint.update();
+        } catch (RuntimeException e) {
+            pinpointFailed = true;
+            return;
+        }
+        double ms = (System.nanoTime() - start) / 1e6;
+        pinpointSlowReads = ms > PINPOINT_SLOW_MS ? pinpointSlowReads + 1 : 0;
+        if (pinpointSlowReads >= PINPOINT_MAX_SLOW) pinpointFailed = true;
     }
 
-    // Robot heading in radians: Pinpoint if present, otherwise the Control Hub IMU
+    public boolean hasHeading() {
+        return (pinpoint != null && !pinpointFailed) || imu != null;
+    }
+
+    // Robot heading in radians: Pinpoint if working, otherwise the Control Hub IMU, otherwise 0
     public double getHeading() {
-        if (pinpoint != null) return pinpoint.getHeading();
+        if (pinpoint != null && !pinpointFailed) return pinpoint.getHeading();
         if (imu != null) return imu.getRobotYawPitchRollAngles().getYaw(AngleUnit.RADIANS);
         return 0;
     }
 
     public void resetHeading() {
-        if (pinpoint != null) pinpoint.resetPosAndIMU();
+        if (pinpoint != null && !pinpointFailed) pinpoint.resetPosAndIMU();
         if (imu != null) imu.resetYaw();
     }
 

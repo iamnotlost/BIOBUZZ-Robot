@@ -176,6 +176,10 @@ public class hwManager {
         return min == Double.MAX_VALUE ? 0 : min;
     }
 
+    public double intakeVelocity() {
+        return intake != null ? intake.getVelocity() : 0;
+    }
+
     public double shooterVelocity() {
         return shooter != null ? shooter.getVelocity() : 0;
     }

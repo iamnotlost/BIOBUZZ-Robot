@@ -39,11 +39,14 @@ public abstract class baseTeleOp extends OpMode {
     // Feeder speed for cross (push balls up) and circle (backwards)
     public static int FEED_UP_VELOCITY    = 1400;
     public static int REVERSE_VELOCITY    = 800;
-    private static final double READY_TOLERANCE = 80;   // at least target minus this = ready to feed
+    // Ready to feed = wheel within this of the target (above OR below) for SETTLE_MS, so every ball
+    // leaves at the same speed instead of catching the wheel while it speeds up or overshoots
+    private static final double READY_TOLERANCE = 50;
+    public static double SETTLE_MS = 100;
     private static final double DROP_TOLERANCE  = 150;  // this far below = a ball just went through, wait
     // If the wheel never quite reaches its target, feed anyway after these times
     public static double SPINUP_TIMEOUT_SECONDS  = 1.5;
-    public static double RECOVER_TIMEOUT_SECONDS = 0.6;
+    public static double RECOVER_TIMEOUT_SECONDS = 1.0;
 
     private static final int NOT_SHOOTING = 0, SHOOT_CLOSE = 1, SHOOT_FAR = 2;
     int shootMode = NOT_SHOOTING; // triangle / square
@@ -61,6 +64,16 @@ public abstract class baseTeleOp extends OpMode {
     // last speeds sent, so motors are only told when something changes
     private int lastFeeder = 0;
     private int lastIntake = 0;   // 1 in, -1 out, 0 stopped
+    private final ElapsedTime settleTimer = new ElapsedTime();
+    private boolean wasInWindow = false;
+
+    // Unjam: if the intake is on but barely turning for JAM_SECONDS, run it backwards briefly
+    public static double JAM_SECONDS    = 0.4;
+    public static double UNJAM_SECONDS  = 0.3;
+    public static double JAM_FRACTION   = 0.3;   // below this share of the set speed = stuck
+    private final ElapsedTime jamTimer = new ElapsedTime();
+    private final ElapsedTime unjamTimer = new ElapsedTime();
+    private boolean unjamming = false;
     boolean buttonPressed = false;
     boolean prevOpponentNectar = false;
     
@@ -295,7 +308,10 @@ public abstract class baseTeleOp extends OpMode {
                 return;
             }
             // step 2: wait until the wheel is (nearly) at speed, or give up waiting after a time limit
-            boolean ready = vel >= target - READY_TOLERANCE;
+            boolean inWindow = Math.abs(vel - target) <= READY_TOLERANCE;
+            if (inWindow && !wasInWindow) settleTimer.reset();
+            wasInWindow = inWindow;
+            boolean ready = inWindow && settleTimer.milliseconds() >= SETTLE_MS;
             double waitLimit = firstBall ? SPINUP_TIMEOUT_SECONDS : RECOVER_TIMEOUT_SECONDS;
             if (!feedingShot && (ready || waitTimer.seconds() >= waitLimit)) {
                 if (firstBall) gamepad1.rumble(200); // short buzz: the first ball is going in
@@ -338,7 +354,28 @@ public abstract class baseTeleOp extends OpMode {
             setIntake(-1);
             setFeeder(-REVERSE_VELOCITY);
         } else {
-            setIntake(loading ? 1 : 0);
+            if (loading) {
+                if (unjamming) {
+                    setIntake(-1);
+                    if (unjamTimer.seconds() >= UNJAM_SECONDS) {
+                        unjamming = false;
+                        jamTimer.reset();
+                    }
+                } else {
+                    setIntake(1);
+                    // stuck = on but turning far slower than set; it gets JAM_SECONDS to spin up first
+                    boolean slow = Math.abs(hwManager.intakeVelocity()) < intake.IN_VELOCITY * JAM_FRACTION;
+                    if (!slow) jamTimer.reset();
+                    else if (jamTimer.seconds() >= JAM_SECONDS) {
+                        unjamming = true;
+                        unjamTimer.reset();
+                    }
+                }
+            } else {
+                setIntake(0);
+                unjamming = false;
+                jamTimer.reset();
+            }
             if (feedingUp)    setFeeder(FEED_UP_VELOCITY);
             // While loading the feeder stays still, so a ball can roll in and settle where the feeder grips it.
             // A spinning feeder knocks incoming balls out of place.
@@ -357,7 +394,7 @@ public abstract class baseTeleOp extends OpMode {
             shooterStatus = "off";
         }
         ballStatus = reversing ? "BACKWARDS (circle to stop)" : feedingUp ? "pushing up (cross to stop)"
-                : loading ? "loading (R1 to stop)" : "stopped";
+                : loading ? (unjamming ? "unjamming..." : "loading (R1 to stop)") : "stopped";
     }
 
     // Shot recorder: while shooting, writes one line about every 50 ms to the robot log (tag SHOT) so a

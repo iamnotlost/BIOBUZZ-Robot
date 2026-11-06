@@ -2,6 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import com.qualcomm.robotcore.util.RobotLog;
 
 
 // Shared TeleOp for both alliances; redTeleOp / blueTeleOp only pick the Alliance
@@ -53,6 +54,8 @@ public abstract class baseTeleOp extends OpMode {
     boolean feedingShot = false;
     private final ElapsedTime shotTimer = new ElapsedTime();
     private final ElapsedTime waitTimer = new ElapsedTime();
+    private final ElapsedTime shotLogTimer = new ElapsedTime();
+    public static final int SHOT_SPEED_STEP = 20;
     private boolean firstBall = true;
     private double feedStartVelocity = 0;
     // last speeds sent, so motors are only told when something changes
@@ -233,6 +236,16 @@ public abstract class baseTeleOp extends OpMode {
             autoRotating = true;
         }
 
+        // D-pad left/right: shot speed -/+ while testing (far speed while shooting far, otherwise close)
+        if (!PRESET_TURNS_ENABLED) {
+            int step = (gamepad1.dpad_right && !prevDPadRight ? SHOT_SPEED_STEP : 0)
+                     - (gamepad1.dpad_left && !prevDPadLeft ? SHOT_SPEED_STEP : 0);
+            if (step != 0) {
+                if (shootMode == SHOOT_FAR) FAR_SHOT_VELOCITY = Math.max(200, FAR_SHOT_VELOCITY + step);
+                else CLOSE_SHOT_VELOCITY = Math.max(200, CLOSE_SHOT_VELOCITY + step);
+            }
+        }
+
         handleBalls();
         showDriverScreen();
 
@@ -298,6 +311,7 @@ public abstract class baseTeleOp extends OpMode {
             // nothing reaches the wheel before it is at speed
             setFeeder(feedingShot ? SHOT_FEED_VELOCITY : 0);
             setIntake(feedingShot ? 1 : 0);
+            logShot(target, vel);
             shooterStatus = String.format("%s  %.0f / %d  (tap %s again to stop)",
                     feedingShot ? "SHOOTING" : "spinning up", vel, target, shootMode == SHOOT_FAR ? "square" : "triangle");
             return;
@@ -346,6 +360,16 @@ public abstract class baseTeleOp extends OpMode {
                 : loading ? "loading (R1 to stop)" : "stopped";
     }
 
+    // Shot recorder: while shooting, writes one line about every 50 ms to the robot log (tag SHOT) so a
+    // test session can be read back afterwards. Columns: seconds since start, target, wheel speed,
+    // feeding (1/0), battery volts.
+    private void logShot(int target, double vel) {
+        if (shotLogTimer.milliseconds() < 50) return;
+        shotLogTimer.reset();
+        RobotLog.ii("SHOT", "%.2f,%d,%.0f,%d,%.2f", shotTimer.seconds(), target, vel,
+                feedingShot ? 1 : 0, hwManager.batteryVoltage());
+    }
+
     // Only what a driver needs during a match
     private void showDriverScreen() {
         String time = matchTimer.display();
@@ -354,7 +378,9 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Time", time);
         telemetry.addData("Shooter", shooterStatus);
         telemetry.addData("Balls", ballStatus);
+        telemetry.addData("Shot speed", "close %d / far %d  (D-pad left/right)", CLOSE_SHOT_VELOCITY, FAR_SHOT_VELOCITY);
         telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
+        telemetry.addData("Battery", "%.1f V", hwManager.batteryVoltage());
         if (hwManager.pinpointFailed) telemetry.addData("!!", "Pinpoint lost - check its cable. Robot-centric only until restart");
         if (prevOpponentNectar) telemetry.addData("!!", "OPPONENT NECTAR - tap circle to spit it out");
         telemetry.addData("Driving", "%s, top speed %.0f%%  (L-stick click / D-pad)",

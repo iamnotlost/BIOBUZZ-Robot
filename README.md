@@ -49,13 +49,16 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Triangle | Shoot (close) on/off: the wheel spins up first, then the feeder pushes balls in only while the wheel is at full speed |
 | Square | Shoot (far) on/off, same as triangle |
 | Left bumper (L1) | Pre-spin the shooter on/off, so triangle fires instantly |
-| D-pad left/right | Turn-to-angle presets, switched off until set for the HIVE (`PRESET_TURNS_ENABLED`) |
+| D-pad left/right | Shot speed -/+ 20 for testing (far speed while shooting far, otherwise close); shown on screen |
 | D-pad up/down | Drive top speed up/down (starts at 40%) |
 | Gamepad 2 D-pad up/down | Intake speed up/down (starts at 300) |
 
 Driving is softened on purpose: small stick pushes move the robot gently, and it speeds up over about
 half a second (by time, not loop speed) instead of jerking. Speed changes made with the D-pad last until the robot app restarts;
 to make one permanent, change `MAX_SPEED` in `drivetrain.java` or `IN_VELOCITY` in `intake.java`.
+
+While shooting, the robot writes wheel speed, feeding and battery voltage to its log about 20 times a
+second (tag `SHOT`), so a test session can be read back and the shot tuned from real numbers.
 
 Gamepads rumble: 2 short buzzes at 1:00 left (NECTAR may go into FLOWERS), one long buzz at 0:15
 left (go park in the LOADING ZONE), and a short buzz when the shooter is ready (L1) or starts

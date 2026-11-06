@@ -8,6 +8,7 @@ import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
+import com.qualcomm.robotcore.hardware.VoltageSensor;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
@@ -163,6 +164,16 @@ public class hwManager {
 
     public boolean buttonPressed() {
         return button != null && !button.getState();
+    }
+
+    // Lowest voltage any hub sees (the battery under load), or 0 if none report
+    public double batteryVoltage() {
+        double min = Double.MAX_VALUE;
+        for (VoltageSensor sensor : hardwareMap.voltageSensor) {
+            double v = sensor.getVoltage();
+            if (v > 0) min = Math.min(min, v);
+        }
+        return min == Double.MAX_VALUE ? 0 : min;
     }
 
     public double shooterVelocity() {

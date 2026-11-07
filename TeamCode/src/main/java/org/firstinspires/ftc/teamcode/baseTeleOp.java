@@ -20,6 +20,9 @@ public abstract class baseTeleOp extends OpMode {
     boolean prevRBumper, prevLBumper;
     boolean prevDPadRight, prevDPadLeft;
     boolean prevOptions;
+    // Start-up choices; changeable and saved in settingsMenu
+    public static boolean FIELD_CENTRIC_DEFAULT = false;
+    public static boolean HEADING_HOLD_DEFAULT  = false;
     boolean fieldCentric = false;
     boolean prevLeftStickButton;
     boolean prevTriangle, prevSquare, prevCross, prevCircle;
@@ -33,15 +36,22 @@ public abstract class baseTeleOp extends OpMode {
     public static double BACK_OFF_SECONDS = 0;
     // Feeder speed while R1 loads; 0 = feeder still so balls settle in place
     public static int FEED_WHILE_LOADING = 0;
+    // Three shot presets ("heights"): D-pad left/right picks one, triangle shoots it, square always shoots FAR
     public static int CLOSE_SHOT_VELOCITY = 1320;
+    public static int MID_SHOT_VELOCITY   = 1590;
     public static int FAR_SHOT_VELOCITY   = 1860;
+    private static final String[] PRESET_NAMES = {"CLOSE", "MID", "FAR"};
+    private int selectedPreset = 0;
+    private String savedMessage = "";
+    private final ElapsedTime savedMessageTimer = new ElapsedTime();
+    boolean prevG2Left, prevG2Right, prevG2Cross;
     public static int SHOT_FEED_VELOCITY  = 1500;
     // Feeder speed for cross (push balls up) and circle (backwards)
     public static int FEED_UP_VELOCITY    = 1400;
     public static int REVERSE_VELOCITY    = 800;
     // Ready to feed = wheel within this of the target (above OR below) for SETTLE_MS, so every ball
     // leaves at the same speed instead of catching the wheel while it speeds up or overshoots
-    private static final double READY_TOLERANCE = 50;
+    public static double READY_TOLERANCE = 50;
     public static double SETTLE_MS = 100;
     private static final double DROP_TOLERANCE  = 150;  // this far below = a ball just went through, wait
     // If the wheel never quite reaches its target, feed anyway after these times
@@ -101,7 +111,11 @@ public abstract class baseTeleOp extends OpMode {
     private static final double CANCEL_STICK_THRESH = 0.15;
 
     // Heading hold: after you let go of the turn stick, gently corrects slow drift. Share toggles it.
-    private boolean headingHoldEnabled = true;
+    private boolean headingHoldEnabled = false;
+    // If holding needs more than this much correction, the heading reading is wrong (e.g. the Pinpoint was
+    // bumped while calibrating in INIT): switch holding off instead of turning the robot round and round
+    private static final double HOLD_GIVE_UP = Math.toRadians(30);
+    private boolean holdGaveUp = false;
     private boolean headingHoldActive = false;
     private double  headingHoldRad    = 0;
     private boolean prevShare;
@@ -113,6 +127,10 @@ public abstract class baseTeleOp extends OpMode {
 
     @Override
     public void init() {
+        boolean loaded = settings.load();
+        fieldCentric = FIELD_CENTRIC_DEFAULT;
+        headingHoldEnabled = HEADING_HOLD_DEFAULT;
+
         hwManager = new hwManager();
         hwManager.initHardware(hardwareMap);
 
@@ -126,6 +144,8 @@ public abstract class baseTeleOp extends OpMode {
         currentTargetHeading = targetHeadingFarRad;
 
         telemetry.addData("init", "complete (" + alliance() + ")");
+        telemetry.addData("Settings", loaded ? "loaded" : "could not read the file - using defaults");
+        telemetry.addData("!!", "Keep the robot STILL during INIT (the Pinpoint calibrates)");
         telemetry.addData("Missing", hwManager.missingText());
     }
 
@@ -198,7 +218,11 @@ public abstract class baseTeleOp extends OpMode {
             if (headingHoldActive) {
                 // Gentle: small power, small dead zone, so it nudges drift back instead of snapping
                 double error = normalizeAngle(headingHoldRad - hwManager.getHeading());
-                if (Math.abs(error) >= HOLD_TOLERANCE) {
+                if (Math.abs(error) > HOLD_GIVE_UP) {
+                    headingHoldEnabled = false;
+                    headingHoldActive = false;
+                    holdGaveUp = true;
+                } else if (Math.abs(error) >= HOLD_TOLERANCE) {
                     double correction = HOLD_KP * error;
                     if (Math.abs(correction) > HOLD_MAX_POWER) {
                         correction = Math.signum(correction) * HOLD_MAX_POWER;
@@ -226,6 +250,7 @@ public abstract class baseTeleOp extends OpMode {
         if (gamepad1.share && !prevShare && hwManager.hasHeading()) {
             headingHoldEnabled = !headingHoldEnabled;
             headingHoldActive = false;
+            holdGaveUp = false;
             headingHoldDelayTimer.reset();
         }
         prevShare = gamepad1.share;
@@ -249,15 +274,25 @@ public abstract class baseTeleOp extends OpMode {
             autoRotating = true;
         }
 
-        // D-pad left/right: shot speed -/+ while testing (far speed while shooting far, otherwise close)
+        // Gamepad 1 D-pad left/right: pick the shot preset (CLOSE / MID / FAR) that triangle shoots
         if (!PRESET_TURNS_ENABLED) {
-            int step = (gamepad1.dpad_right && !prevDPadRight ? SHOT_SPEED_STEP : 0)
-                     - (gamepad1.dpad_left && !prevDPadLeft ? SHOT_SPEED_STEP : 0);
-            if (step != 0) {
-                if (shootMode == SHOOT_FAR) FAR_SHOT_VELOCITY = Math.max(200, FAR_SHOT_VELOCITY + step);
-                else CLOSE_SHOT_VELOCITY = Math.max(200, CLOSE_SHOT_VELOCITY + step);
-            }
+            if (gamepad1.dpad_right && !prevDPadRight) selectedPreset = Math.min(2, selectedPreset + 1);
+            if (gamepad1.dpad_left && !prevDPadLeft)   selectedPreset = Math.max(0, selectedPreset - 1);
         }
+
+        // Gamepad 2 at the field: D-pad left/right = selected shot speed -/+ 20, cross = SAVE all settings
+        int g2Step = (gamepad2.dpad_right && !prevG2Right ? SHOT_SPEED_STEP : 0)
+                   - (gamepad2.dpad_left && !prevG2Left ? SHOT_SPEED_STEP : 0);
+        if (g2Step != 0) setPresetVelocity(selectedPreset, presetVelocity(selectedPreset) + g2Step);
+        if (gamepad2.cross && !prevG2Cross) {
+            boolean ok = settings.save();
+            savedMessage = ok ? "SAVED" : "SAVE FAILED";
+            savedMessageTimer.reset();
+            gamepad2.rumble(ok ? 200 : 800);
+        }
+        prevG2Left  = gamepad2.dpad_left;
+        prevG2Right = gamepad2.dpad_right;
+        prevG2Cross = gamepad2.cross;
 
         handleBalls();
         showDriverScreen();
@@ -288,7 +323,7 @@ public abstract class baseTeleOp extends OpMode {
         if (square)   shootMode = shootMode == SHOOT_FAR   ? NOT_SHOOTING : SHOOT_FAR;
 
         if (shootMode != NOT_SHOOTING) {
-            int target = shootMode == SHOOT_FAR ? FAR_SHOT_VELOCITY : CLOSE_SHOT_VELOCITY;
+            int target = shootMode == SHOOT_FAR ? FAR_SHOT_VELOCITY : presetVelocity(selectedPreset);
             if (wasShooting == NOT_SHOOTING) {
                 feedingShot = false;
                 loading = feedingUp = reversing = false;
@@ -334,7 +369,7 @@ public abstract class baseTeleOp extends OpMode {
         }
 
         if (wasShooting != NOT_SHOOTING) feedingShot = false;
-        if (preSpin) shooter.spinTo(CLOSE_SHOT_VELOCITY);
+        if (preSpin) shooter.spinTo(presetVelocity(selectedPreset));
         else shooter.turnOff();
 
         if (gamepad1.right_bumper && !prevRBumper) {
@@ -385,10 +420,10 @@ public abstract class baseTeleOp extends OpMode {
 
         if (preSpin) {
             double vel = hwManager.shooterVelocity();
-            boolean ready = vel >= CLOSE_SHOT_VELOCITY - READY_TOLERANCE;
+            boolean ready = Math.abs(vel - presetVelocity(selectedPreset)) <= READY_TOLERANCE;
             if (ready && !readyRumbled) gamepad1.rumble(200); // short buzz: wheel is up to speed
             readyRumbled = ready || readyRumbled;
-            shooterStatus = ready ? "READY - tap triangle" : String.format("pre-spinning %.0f / %d", vel, CLOSE_SHOT_VELOCITY);
+            shooterStatus = ready ? "READY - tap triangle" : String.format("pre-spinning %.0f / %d", vel, presetVelocity(selectedPreset));
         } else {
             readyRumbled = false;
             shooterStatus = "off";
@@ -415,16 +450,30 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Time", time);
         telemetry.addData("Shooter", shooterStatus);
         telemetry.addData("Balls", ballStatus);
-        telemetry.addData("Shot speed", "close %d / far %d  (D-pad left/right)", CLOSE_SHOT_VELOCITY, FAR_SHOT_VELOCITY);
+        telemetry.addData("Shot", "%s %d  (D-pad L/R: switch)   pad 2 L/R: adjust, X: save %s",
+                PRESET_NAMES[selectedPreset], presetVelocity(selectedPreset),
+                savedMessageTimer.seconds() < 3 ? "- " + savedMessage : "");
         telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
         telemetry.addData("Battery", "%.1f V", hwManager.batteryVoltage());
         if (hwManager.pinpointFailed) telemetry.addData("!!", "Pinpoint lost - check its cable. Robot-centric only until restart");
         if (prevOpponentNectar) telemetry.addData("!!", "OPPONENT NECTAR - tap circle to spit it out");
         telemetry.addData("Driving", "%s, top speed %.0f%%  (L-stick click / D-pad)",
                 fieldCentric ? "FIELD-centric" : "ROBOT-centric", drivetrain.MAX_SPEED * 100);
-        telemetry.addData("Heading hold", headingHoldEnabled ? "on (Share)" : "off (Share)");
+        telemetry.addData("Heading hold", headingHoldEnabled ? "on (Share)" : holdGaveUp
+                ? "OFF - it had to turn too far, heading reading looks wrong (Share to retry)" : "off (Share)");
         if (!hwManager.missing.isEmpty()) telemetry.addData("Not found", hwManager.missingText());
         telemetry.update();
+    }
+
+    private int presetVelocity(int preset) {
+        return preset == 2 ? FAR_SHOT_VELOCITY : preset == 1 ? MID_SHOT_VELOCITY : CLOSE_SHOT_VELOCITY;
+    }
+
+    private void setPresetVelocity(int preset, int velocity) {
+        velocity = Math.max(200, Math.min(2800, velocity));
+        if (preset == 2)      FAR_SHOT_VELOCITY = velocity;
+        else if (preset == 1) MID_SHOT_VELOCITY = velocity;
+        else                  CLOSE_SHOT_VELOCITY = velocity;
     }
 
     private void setFeeder(int velocity) {

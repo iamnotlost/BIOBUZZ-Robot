@@ -25,6 +25,7 @@ public abstract class baseAuto extends LinearOpMode {
     final ElapsedTime autoTimer = new ElapsedTime();
 
     protected void setup() {
+        settings.load(); // park distances and start delay from settingsMenu
         hwManager = new hwManager();
         hwManager.initHardware(hardwareMap);
         drivetrain = new drivetrain(hwManager);

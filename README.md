@@ -26,6 +26,9 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 - `hardwareTest` – runs any motor or servo in the configuration, whatever it's named. D-pad up/down picks a device, left stick runs it. Also shows heading, Pinpoint position and the color sensor reading.
 - `driveTest` – drive base only. Hold a D-pad direction to spin a single wheel (up = frontLeft, right = frontRight, down = backRight, left = backLeft); each one should push the robot forward. Square switches field-/robot-centric.
 
+**Setup**
+- `settingsMenu` – change shot speeds, intake, drive speed, auto park distances and more with the D-pad, press X to save them on the robot (file `FIRST/biobuzz_settings.txt`). No re-upload needed. Nothing moves in this menu.
+
 **TeleOp**
 - `redTeleOp`, `blueTeleOp` – full driver control with the 2:00 match timer.
 
@@ -42,14 +45,16 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Right stick X | Turn |
 | Either trigger | Slow down gradually: the harder you squeeze, the slower (down to 25%) |
 | Options | Reset heading (point the robot away from you first) |
-| Share | Heading hold on/off (gently keeps the robot pointing the same way when you let go of turning) |
+| Share | Heading hold on/off (off by default; switches itself off if the heading reading looks wrong) |
 | Right bumper (R1) | Load on/off: intake only (slow); the feeder stays still so balls settle where it grips them |
 | Cross | Feeder pushes balls up on/off |
 | Circle | Intake and feeder backwards on/off (pull a ball back down / spit it out) |
 | Triangle | Shoot (close) on/off: the wheel spins up first, then the feeder pushes balls in only while the wheel is at full speed |
 | Square | Shoot (far) on/off, same as triangle |
 | Left bumper (L1) | Pre-spin the shooter on/off, so triangle fires instantly |
-| D-pad left/right | Shot speed -/+ 20 for testing (far speed while shooting far, otherwise close); shown on screen |
+| D-pad left/right | Pick the shot preset: CLOSE / MID / FAR (triangle shoots it, square always shoots FAR) |
+| Gamepad 2 D-pad left/right | Selected shot speed -/+ 20 |
+| Gamepad 2 cross | SAVE all settings on the robot |
 | D-pad up/down | Drive top speed up/down (starts at 40%) |
 | Gamepad 2 D-pad up/down | Intake speed up/down (starts at 300) |
 

@@ -387,12 +387,14 @@ public abstract class baseTeleOp extends OpMode {
 
         if (wasShooting) feedingShot = false;
         shooter.setLearning(true);
-        if (preSpin) shooter.spinTo(SHOT_VELOCITY);
+        if (preSpin && !reversing) shooter.spinTo(SHOT_VELOCITY);
         else shooter.turnOff();
 
         if (reversing) {
+            // everything backwards, shooter wheel too, so a ball stuck anywhere comes back out
             setIntake(-1);
             setFeeder(-REVERSE_VELOCITY);
+            shooter.reverse();
         } else {
             if (loading) {
                 if (unjamming) {

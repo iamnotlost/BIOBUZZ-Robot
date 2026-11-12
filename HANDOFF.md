@@ -116,7 +116,7 @@ stay `null`, code skips them, and the Driver Hub shows them on a "Not found / Mi
 | Share | Heading hold on/off (off by default) |
 | **R1** | **Hold** to load: intake pulls balls in; the feeder stays **still** so balls settle where it grips them |
 | **✕** | **Hold**: feeder pushes balls up |
-| **○** | **Hold**: intake + feeder backwards (spit out / pull ball back) |
+| **○** | **Hold**: intake + feeder + shooter wheel backwards (shooter only once it has slowed below 300, at 30 % power) |
 | **△** | **Hold** to shoot at the one **shot speed**, let go to stop |
 | **D-pad up/down** | Shot **stronger/weaker by 10**, saved on the robot at once (tune with one controller) |
 | L1 | **Hold** to pre-spin the shooter at the shot speed |

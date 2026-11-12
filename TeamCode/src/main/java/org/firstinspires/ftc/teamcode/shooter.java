@@ -48,6 +48,7 @@ public class shooter {
     // Wanted wheel speed in ticks/s; calling it every loop is fine
     public void spinTo(int speed) {
         target = Math.max(0, speed);
+        reversing = false;
     }
 
     // true while no ball is being fed; false while feeding, so a ball loading the wheel doesn't change it
@@ -57,7 +58,20 @@ public class shooter {
 
     public void turnOff() {
         target = 0;
+        reversing = false;
         setPower(0);
+    }
+
+    // Wheel backwards (hold circle in TeleOp: everything runs backwards so nothing stays stuck).
+    // Gentle power, and only once the wheel has (nearly) stopped: throwing a fast wheel into reverse would pull a
+    // huge current from the battery (that is what made the hubs cut out before).
+    public static double REVERSE_POWER = 0.3;
+    public static double REVERSE_BELOW = 300;   // ticks/s: wheel slower than this may be reversed
+    private boolean reversing = false;
+
+    public void reverse() {
+        target = 0;
+        reversing = true;
     }
 
     public double power() {
@@ -67,6 +81,11 @@ public class shooter {
     public void update() {
         double dt = Math.min(dtTimer.seconds(), 0.1);
         dtTimer.reset();
+        if (reversing && hwManager.shooter != null) {
+            // coast until the wheel is slow, then run it gently backwards
+            setPower(hwManager.shooterVelocity() < REVERSE_BELOW ? -REVERSE_POWER : 0);
+            return;
+        }
         if (hwManager.shooter == null || target <= 0) {
             setPower(0);
             return;

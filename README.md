@@ -51,7 +51,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Share | Heading hold on/off (off by default; switches itself off if the heading reading looks wrong) |
 | Right bumper (R1) | **Hold** to load: intake only (slow); the feeder stays still so balls settle where it grips them |
 | Cross | **Hold**: feeder pushes balls up |
-| Circle | **Hold**: intake and feeder backwards (pull a ball back down / spit it out) |
+| Circle | **Hold**: intake, feeder and shooter wheel backwards (pull a stuck ball back out / spit it out) |
 | Triangle | **Hold** to shoot: the wheel spins up first; the feeder runs only while the wheel is at the shot speed and stops after each ball until the wheel is back at speed, so every ball flies the same. Let go to stop |
 | Left bumper (L1) | **Hold** to pre-spin the shooter, so triangle fires sooner |
 | D-pad up/down | Shot stronger/weaker by 10, saved on the robot at once (one controller is enough to tune shots) |

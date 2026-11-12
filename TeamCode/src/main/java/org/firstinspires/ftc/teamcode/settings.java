@@ -83,10 +83,16 @@ public class settings {
         ITEMS.add(new Item("parkSide", "Auto park: sideways (in, + = left on red)", 1, -72, 72, true,
                 () -> baseParkAuto.PARK_SIDE, v -> baseParkAuto.PARK_SIDE = v));
         // Shooting auto spots (normally saved by setupAutoRed / setupAutoBlue)
-        addSpot("redShoot",  "RED shoot spot",  autoSpots.RED_SHOOT);
-        addSpot("redEnd",    "RED end spot",    autoSpots.RED_END);
-        addSpot("blueShoot", "BLUE shoot spot", autoSpots.BLUE_SHOOT);
-        addSpot("blueEnd",   "BLUE end spot",   autoSpots.BLUE_END);
+        addSpot("redShoot",   "RED A shoot spot",  autoSpots.RED_SHOOT);
+        addSpot("redEnd",     "RED A end spot",    autoSpots.RED_END);
+        addSpot("blueShoot",  "BLUE A shoot spot", autoSpots.BLUE_SHOOT);
+        addSpot("blueEnd",    "BLUE A end spot",   autoSpots.BLUE_END);
+        addSpot("redShootB",  "RED B shoot spot",  autoSpots.RED_SHOOT_B);
+        addSpot("redEndB",    "RED B end spot",    autoSpots.RED_END_B);
+        addSpot("blueShootB", "BLUE B shoot spot", autoSpots.BLUE_SHOOT_B);
+        addSpot("blueEndB",   "BLUE B end spot",   autoSpots.BLUE_END_B);
+        addSpot("redPark",   "RED safe park spot",  autoSpots.RED_PARK);
+        addSpot("bluePark",  "BLUE safe park spot", autoSpots.BLUE_PARK);
     }
 
     private static void addSpot(String key, String label, double[] spot) {

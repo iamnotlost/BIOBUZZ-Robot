@@ -27,6 +27,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 - `driveTest` – drive base only. Hold a D-pad direction to spin a single wheel (up = frontLeft, right = frontRight, down = backRight, left = backLeft); each one should push the robot forward. Square switches field-/robot-centric.
 
 **Setup**
+- `setupParkRed`, `setupParkBlue` – teach the safe park auto: INIT on the corner start spot, drive into the LOADING ZONE, O saves.
 - `setupAutoRed`, `setupAutoBlue` – teach the shooting auto: INIT on the start spot, drive, X saves the shoot spot, O saves the end spot, hold triangle test-shoots.
 - `settingsMenu` – change shot speeds, intake, drive speed, auto park distances and more with the D-pad, press X to save them on the robot (file `FIRST/biobuzz_settings.txt`). No re-upload needed. Nothing moves in this menu.
 
@@ -35,8 +36,8 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 
 **Autonomous**
 - `leaveAuto` – drives 12 in. off the wall: LEAVE, 3 pts.
-- `parkRed`, `parkBlue` – LEAVE, then park in the LOADING ZONE: 8 pts. The park distances are placeholders; measure on a real field and set them in `baseParkAuto`.
-- `shootRed`, `shootBlue` – drive to the taught shoot spot, shoot all 4 pre-loaded POLLEN, drive to the taught end spot (put it in the LOADING ZONE, off the wall: LEAVE + PARK). Teach the spots with `setupAutoRed` / `setupAutoBlue`.
+- `parkRed`, `parkBlue` – safe park: start in our corner, drive straight off the wall, then sideways into the LOADING ZONE (LEAVE + PARK = 8 pts) without getting in the other alliance's way. Teach the park spot with `setupParkRed` / `setupParkBlue`.
+- `shootRed`, `shootBlue` – drive to the taught shoot spot, shoot all 4 pre-loaded POLLEN, drive to the taught end spot (put it in the LOADING ZONE, off the wall: LEAVE + PARK). Teach the spots with `setupAutoRed` / `setupAutoBlue`. Two plans (A / B, different start spots) are picked with the D-pad during INIT. The Driver Hub shows each step and what happened; the same lines are in the robot log (tag `AUTO`).
 
 ## TeleOp controls (gamepad 1)
 

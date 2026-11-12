@@ -23,6 +23,14 @@ public class shooter {
     private static final double I_MAX  = 0.15;   // the learned extra never goes past this
     private static final double I_ZONE = 150;    // only learn when this close (not while spinning up from 0)
 
+    // Gentle start: while the wheel is below SPINUP_BELOW of the target, power may only go up by this much per
+    // second (0 -> 100% in 0.5 s). Two motors jumping to 100% from standstill pulled so much current that the
+    // battery fell to ~7 V and the Expansion Hub (shooter + feeder) cut out (2026-11-12). This halves the peak
+    // current (simulated) and the wheel still reaches 1240 in ~0.6 s. After a ball (wheel still fast) there is
+    // no limit, so recovery between balls is as quick as before.
+    public static double SPINUP_RAMP_PER_S = 2.0;
+    public static double SPINUP_BELOW      = 0.8;
+
     private double target = 0;
     private double integral = 0;
     private boolean learning = true;
@@ -60,12 +68,16 @@ public class shooter {
             setPower(0);
             return;
         }
-        double error = target - hwManager.shooterVelocity();
+        double vel = hwManager.shooterVelocity();
+        double error = target - vel;
         if (learning && Math.abs(error) < I_ZONE) {
             integral = Math.max(-I_MAX, Math.min(I_MAX, integral + kI * error * dt));
         }
-        double p = kF * target + kP * error + integral;
-        setPower(Math.max(0, Math.min(1, p)));   // never brakes: the wheel only coasts down
+        double p = Math.max(0, Math.min(1, kF * target + kP * error + integral));   // never brakes: only coasts down
+        if (p > power && vel < SPINUP_BELOW * target) {
+            p = Math.min(p, power + SPINUP_RAMP_PER_S * dt);   // gentle start (see SPINUP_RAMP_PER_S)
+        }
+        setPower(p);
     }
 
     private void setPower(double p) {

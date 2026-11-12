@@ -12,11 +12,12 @@ public class drivetrain {
     public static double TURN_SPEED = 0.4;
     public static final double SPEED_STEP = 0.1;
 
-    // Seconds to go from stopped to full power, so the robot eases into moves instead of jerking.
-    // Slowing down is 4x quicker, and letting go of a stick stops at once (motors brake), so the robot
-    // never keeps rolling after you let go.
-    public static double RAMP_SECONDS = 0.5;
-    public static double SLOW_DOWN_FACTOR = 4.0;
+    // Seconds to go from stopped to full power: short, so the robot reacts at once but doesn't jerk.
+    // (0.5 felt slow to react on 2026-11-12.)
+    public static double RAMP_SECONDS = 0.2;
+    // Seconds to go from full power to stopped when you slow down or let go: quick enough that the robot
+    // doesn't keep rolling, smooth enough that it doesn't jerk (stopping at once felt jerky). Motors brake at 0.
+    public static double STOP_SECONDS = 0.1;
 
     // Last command sent: driving as one arrow (x, y) plus turning
     private double lastX, lastY, lastRx;
@@ -31,7 +32,7 @@ public class drivetrain {
     }
 
     // Sticks closer to center than this count as zero, so a light touch or a worn stick doesn't creep
-    public static double STICK_DEAD_ZONE = 0.10;
+    public static double STICK_DEAD_ZONE = 0.06;
 
     // Dead zone, then squared so small pushes are gentle while a full push still reaches 1
     public static double curve(double stick) {
@@ -39,6 +40,22 @@ public class drivetrain {
         if (a < STICK_DEAD_ZONE) return 0;
         double scaled = (a - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE);
         return Math.signum(stick) * scaled * scaled;
+    }
+
+    // TeleOp stick feel. Any push past the dead zone starts at the smallest power that really moves the
+    // robot (below that the wheels just hum), then curves up to the top speed: small pushes = small,
+    // controllable moves; a full push = top speed. (Plain squaring left the first third of the stick dead.)
+    public static double MIN_DRIVE_POWER = 0.07;
+    public static double MIN_TURN_POWER  = 0.06;
+    public static double CURVE_POWER     = 1.8;
+
+    // stick amount (0..1, or -1..1 for turning) -> power, between the smallest moving power and top
+    public static double shape(double stick, double top, double min) {
+        double a = Math.min(1, Math.abs(stick));
+        if (a < STICK_DEAD_ZONE) return 0;
+        double s = (a - STICK_DEAD_ZONE) / (1 - STICK_DEAD_ZONE);
+        min = Math.min(min, top);
+        return Math.signum(stick) * (min + (top - min) * Math.pow(s, CURVE_POWER));
     }
 
     public static void adjustMaxSpeed(int steps) {
@@ -75,15 +92,13 @@ public class drivetrain {
     private void rampTo(double x, double y, double rx) {
         double dt = Math.min(loopTimer.seconds(), 0.1); // a stalled loop must not cause a jump
         loopTimer.reset();
-        double step = dt / RAMP_SECONDS;
+        double step = RAMP_SECONDS > 0 ? dt / RAMP_SECONDS : 1;   // speeding up
+        double stopStep = dt / STOP_SECONDS;                         // slowing down / stopping
 
         double dx = x - lastX, dy = y - lastY;
         double dist = Math.hypot(dx, dy);
-        double moveStep = Math.hypot(x, y) < Math.hypot(lastX, lastY) ? step * SLOW_DOWN_FACTOR : step;
-        if (x == 0 && y == 0) {
-            // stick let go: stop driving at once (the motors brake)
-            lastX = lastY = 0;
-        } else if (dist <= moveStep) {
+        double moveStep = Math.hypot(x, y) < Math.hypot(lastX, lastY) ? stopStep : step;
+        if (dist <= moveStep) {
             lastX = x;
             lastY = y;
         } else {
@@ -92,10 +107,8 @@ public class drivetrain {
         }
 
         double dr = rx - lastRx;
-        double turnStep = Math.abs(rx) < Math.abs(lastRx) ? step * SLOW_DOWN_FACTOR : step;
-        if (rx == 0)                    lastRx = 0;   // turn stick let go: stop turning at once
-        else if (Math.abs(dr) <= turnStep) lastRx = rx;
-        else                            lastRx += Math.signum(dr) * turnStep;
+        double turnStep = Math.abs(rx) < Math.abs(lastRx) ? stopStep : step;
+        lastRx = Math.abs(dr) <= turnStep ? rx : lastRx + Math.signum(dr) * turnStep;
     }
 
     private void setPowers(double x, double y, double rx) {

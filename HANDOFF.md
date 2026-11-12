@@ -90,7 +90,7 @@ stay `null`, code skips them, and the Driver Hub shows them on a "Not found / Mi
 | File | What it does |
 |---|---|
 | `hwManager` | Finds all devices by name, motor directions, **bulk reads**, Pinpoint with stuck-bus protection (`pinpointFailed`), heading, battery voltage, intake/shooter velocity |
-| `drivetrain` | Mecanum math. Robot-centric and field-centric. Stick dead zone (0.10) + squared curve, time-based ramp (`RAMP_SECONDS`) when speeding up, 4x faster slowing down, **stops at once when a stick is let go**, ramps movement as one arrow, `MAX_SPEED` 0.4, `TURN_SPEED` 0.4 |
+| `drivetrain` | Mecanum math. Robot-centric and field-centric. Left stick read as one arrow (radial dead zone 0.06, no sideways drift); `shape()` = any push past the dead zone starts at `MIN_DRIVE_POWER` 0.07 (turn 0.06) and curves (^1.8) up to top speed; triggers lower only the top speed. Speeds up in `RAMP_SECONDS` 0.2, slows/stops in `STOP_SECONDS` 0.1 (brake). Tuned 2026-11-12 after "slow to react, small moves dead, jerky stops, too fast"; `MAX_SPEED` 0.4, `TURN_SPEED` 0.4 |
 | `intake` | Intake motor, `IN_VELOCITY` 300 / `OUT_VELOCITY` -300 |
 | `supply` | Feeder motor |
 | `shooter` | Shooter motors, `spinTo(speed)` |
@@ -127,20 +127,24 @@ stay `null`, code skips them, and the Driver Hub shows them on a "Not found / Mi
 | Gamepad 2 **✕** | **Save all settings** on the robot |
 
 **How shooting works (hold △):** optional back-off (`BACK_OFF_SECONDS`, now 0) → spin up → feed only when the wheel is
-within `READY_TOLERANCE` (50) of target **and has stayed there `SETTLE_MS` (100 ms)** → after each ball the wheel
+within `READY_TOLERANCE` (50) of target **and has stayed there `SETTLE_MS` (100 ms)** (hub `getVelocity` reading,
+steps of 20). **Don't tighten this blindly:** on 2026-11-12 a ±20 window with an averaged speed made the feeder start
+and stop, balls stuck against the wheel and shots came out weak or not at all; it was reverted to this version, which
+shot into the net every time at 1240. → after each ball the wheel
 drops; feeding pauses until it settles again. Then the balls go **one after another**: the first ball waits for the wheel to be at speed and steady; after each ball
 the wheel control brings it back without overshooting and, with `WAIT_BETWEEN_BALLS` (settingsMenu "Shot: wait for wheel
 between balls", default ON), the feeder pauses only until the wheel is back within ±50 (no extra settle), so every
 ball leaves at the same speed. OFF = feeder never stops after the first ball (fastest, later balls may fly lower). No "feed anyway" time limit; after 2 s of waiting the screen
 says the wheel CAN'T REACH the speed (lower it or change battery). One shot speed for every shot (no CLOSE/MID/FAR):
-`SHOT_VELOCITY` 1320 ticks/s (lowered from 1420 on 2026-11-12); feeder stops when the wheel
+`SHOT_VELOCITY` **1240** ticks/s (shot into the net every time, 2026-11-12); feeder stops when the wheel
 drops `DROP_TOLERANCE` (80) below = a ball hit it; feeder while shooting 1500; ✕ feeder 1400.
 
 **Driver screen** shows: time (+ "GO PARK" / "NECTAR allowed"), shooter status (+ balls shot), ball status, shot speed,
 intake speed, battery, driving mode, heading hold, warnings (Pinpoint lost, opponent NECTAR, missing devices).
 
 **Shot recorder:** while shooting, the robot logs a line every ~50 ms with tag `SHOT`:
-`seconds,target,wheelSpeed,feeding(1/0),batteryVolts` – read it from the robot log to tune shots from real data.
+`seconds,target,wheelSpeed,feeding(1/0),batteryVolts,motorPower` – read it from the robot log to tune shots from
+real data.
 
 ## 6. Settings saved on the robot
 
@@ -156,10 +160,27 @@ field, copy them into the code defaults.
 ## 7. Autonomous
 
 - `leaveAuto`: drive `LEAVE_DISTANCE` (12″) straight off the wall → LEAVE 3 pts.
-- `parkRed` / `parkBlue`: leave, then drive to (`PARK_FORWARD`, `PARK_SIDE`) inches from the start → PARK
-  in LOADING ZONE. **Distances are placeholders** (12, 24) – measure at the field and set in `settingsMenu`.
-  Blue mirrors red's sideways distance.
-- Paths are **relative to the start pose** (0,0,0): +x = straight ahead, +y = robot's left.
+- **`parkRed` / `parkBlue` = SAFE PARK** (when the opponents are strong and we stay out of their way): start in our
+  CORNER touching the wall, drive straight off the wall (at least `MIN_OFF_WALL` 3″, forwards or backwards: the same way as the taught park spot, because the robot may start facing the wall), then sideways into our LOADING
+  ZONE → LEAVE 3 + PARK 5. The park spot is taught with **`setupParkRed` / `setupParkBlue`** (INIT on the corner
+  start, drive into the LOADING ZONE without touching the wall, ○ saves; keys redParkX/Y/H, bluePark…). If never
+  taught, it falls back to the old `settingsMenu` numbers (leave distance, park forward/sideways; blue mirrors).
+- Paths are **relative to the start pose** (0,0,0): +x = straight ahead, +y = robot's left. The robot may start facing the wall; then driving into the field is NEGATIVE x (backwards), which is fine.
+- **Paths don't hold at the end** (`followPath(path, false)`): Pedro's automatic hold made the robot rock forward
+  and backward at the spot. A drive also counts as done within `ARRIVED_IN` 1″ / `ARRIVED_DEG` 3° of the spot.
+- **Shooter gentle start** (`shooter.SPINUP_RAMP_PER_S` 2.0 while below 80 % of target): both motors at 100 % from
+  standstill dropped the battery to ~7 V and the Expansion Hub (shooter + feeder) cut out. If the Driver Hub still
+  shows big drops, check the battery (try another), the battery connector and the main power switch.
+- **Plan A / Plan B** (shooting auto): two taught routes per alliance with different START spots, chosen with the
+  D-pad (left = A, right = B) during INIT of `shootRed/Blue` and `setupAutoRed/Blue`. For when the alliance partner
+  needs our usual start spot (the other alliance can't take it: G304 = everyone starts on their own side). A plan is
+  "set up" once its END spot is saved. Saving the SHOOT spot at the start (0,0,0) = shoot without driving first.
+- **Debug:** every auto shows the current STEP, where the robot is, where it is going (inches to go) and the last 7
+  EVENTS on the Driver Hub (reached X in 1.2 s, 0.8 in off / GAVE UP - blocked?, wheel ready at 1238, ball 2 hit the
+  wheel, shooting stopped: all 4 balls / no ball for 1.5 s / time up, DONE at …). The same lines go to the robot log
+  with tag `AUTO` (`adb pull /sdcard/robotControllerLog.txt`, search `AUTO`). INIT screen checks: plan set up, battery
+  (warns < 12.5 V), missing devices, odometry (must stay 0,0,0 while still). The summary stays on screen after the
+  auto until STOP.
 - Every auto stops `SAFETY_MARGIN_S` (1 s) before 30 s.
 - **`shootRed` / `shootBlue`** (main auto): START → drive to the taught SHOOT spot (turning to aim) → shoot all 4
   preloads with the same burst as TeleOp (`burst.java`; the upward CELL already has 3 NECTAR, so 4 POLLEN can TIP

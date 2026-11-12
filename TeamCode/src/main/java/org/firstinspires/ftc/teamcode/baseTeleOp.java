@@ -42,8 +42,8 @@ public abstract class baseTeleOp extends OpMode {
     // Feeder speed while R1 loads; 0 = feeder still so balls settle in place
     public static int FEED_WHILE_LOADING = 0;
     // The one shot speed (ticks/s). D-pad up/down changes it by 20 and saves it.
-    // (2026-11-12: lowered from 1420; the team had tuned 1360 on the field, then asked for a bit slower)
-    public static int SHOT_VELOCITY = 1320;
+    // (1240 = shot into the net every time on 2026-11-12)
+    public static int SHOT_VELOCITY = 1240;
     // This far below the shot speed = a ball just hit the wheel: stop feeding until it is back at speed
     public static double DROP_TOLERANCE = 80;
     // true: after each ball the feeder pauses until the wheel is back at speed (same height, a tiny bit slower)
@@ -62,6 +62,8 @@ public abstract class baseTeleOp extends OpMode {
     public static int REVERSE_VELOCITY    = 800;
     // Ready to feed = wheel within this of the target (above OR below) for SETTLE_MS, so every ball
     // leaves at the same speed instead of catching the wheel while it speeds up or overshoots
+    // 50 = the version that shot into the net every time. (Tried 20 with an averaged speed on 2026-11-12:
+    // the feeder kept starting and stopping, balls stuck against the wheel and shots came out weak.)
     public static double READY_TOLERANCE = 50;
     public static double SETTLE_MS = 100;
 
@@ -185,19 +187,25 @@ public abstract class baseTeleOp extends OpMode {
         if (opponentNectar && !prevOpponentNectar) gamepad1.rumble(500);
         prevOpponentNectar = opponentNectar;
 
-        double x  = -drivetrain.curve(gamepad1.left_stick_x)  * drivetrain.MAX_SPEED;
-        double y  =  drivetrain.curve(gamepad1.left_stick_y)  * drivetrain.MAX_SPEED;
-        double rx = -drivetrain.curve(gamepad1.right_stick_x) * drivetrain.TURN_SPEED;
-
         // Squeeze either trigger to slow down gradually: the harder you squeeze, the slower (down to 25%)
         double squeeze = Math.max(gamepad1.left_trigger, gamepad1.right_trigger);
         double speedMult = 1.0 - (1.0 - MIN_TRIGGER_SPEED) * squeeze;
+
+        // Left stick as one arrow: dead zone and stick feel act on how far it is pushed, and the direction is
+        // kept exactly, so pushing straight ahead never drifts sideways. The trigger lowers the top speed only,
+        // so small pushes still move the robot while slowed down.
+        double sx = -gamepad1.left_stick_x, sy = gamepad1.left_stick_y;
+        double push = Math.hypot(sx, sy);
+        double movePower = drivetrain.shape(push, drivetrain.MAX_SPEED * speedMult, drivetrain.MIN_DRIVE_POWER);
+        double x  = push > 0 ? sx / push * movePower : 0;
+        double y  = push > 0 ? sy / push * movePower : 0;
+        double rx = -drivetrain.shape(gamepad1.right_stick_x, drivetrain.TURN_SPEED * speedMult, drivetrain.MIN_TURN_POWER);
 
         if (autoRotating && Math.abs(gamepad1.right_stick_x) > CANCEL_STICK_THRESH) {
             autoRotating = false;
         }
 
-        double driveRx = rx * speedMult;
+        double driveRx = rx;
         if (autoRotating) {
             double error = normalizeAngle(currentTargetHeading - hwManager.getHeading());
             if (Math.abs(error) < HEADING_TOLERANCE) {
@@ -241,8 +249,8 @@ public abstract class baseTeleOp extends OpMode {
         if (gamepad1.left_stick_button && !prevLeftStickButton && hwManager.hasHeading()) fieldCentric = !fieldCentric;
         prevLeftStickButton = gamepad1.left_stick_button;
 
-        if (fieldCentric) drivetrain.drive(x * speedMult, y * speedMult, driveRx);
-        else              drivetrain.driveRobotCentric(x * speedMult, y * speedMult, driveRx);
+        if (fieldCentric) drivetrain.drive(x, y, driveRx);
+        else              drivetrain.driveRobotCentric(x, y, driveRx);
 
         if (gamepad1.options && !prevOptions) {
             drivetrain.resetYaw();

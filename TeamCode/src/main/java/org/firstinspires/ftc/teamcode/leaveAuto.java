@@ -16,8 +16,9 @@ public class leaveAuto extends baseAuto {
         startTimer();
 
         waitSeconds(START_DELAY_S);
-        runPath(lineTo(LEAVE_DISTANCE, 0));
+        step("drive straight off the wall");
+        goTo("off the wall", new double[] {LEAVE_DISTANCE, 0, 0}, AUTO_SECONDS);
 
-        stopAll();
+        finish();
     }
 }

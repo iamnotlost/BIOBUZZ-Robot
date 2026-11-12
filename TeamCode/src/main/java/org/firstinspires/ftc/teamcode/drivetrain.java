@@ -9,13 +9,14 @@ public class drivetrain {
 
     // Top speeds (0-1) for TeleOp sticks. MAX_SPEED is adjustable while driving (gamepad 1 D-pad up/down)
     public static double MAX_SPEED  = 0.4;
-    public static double TURN_SPEED = 0.3;
+    public static double TURN_SPEED = 0.4;
     public static final double SPEED_STEP = 0.1;
 
     // Seconds to go from stopped to full power, so the robot eases into moves instead of jerking.
-    // Slowing down is twice as quick so the robot still stops when you let go.
+    // Slowing down is 4x quicker, and letting go of a stick stops at once (motors brake), so the robot
+    // never keeps rolling after you let go.
     public static double RAMP_SECONDS = 0.5;
-    public static double SLOW_DOWN_FACTOR = 2.0;
+    public static double SLOW_DOWN_FACTOR = 4.0;
 
     // Last command sent: driving as one arrow (x, y) plus turning
     private double lastX, lastY, lastRx;
@@ -30,7 +31,7 @@ public class drivetrain {
     }
 
     // Sticks closer to center than this count as zero, so a light touch or a worn stick doesn't creep
-    public static double STICK_DEAD_ZONE = 0.06;
+    public static double STICK_DEAD_ZONE = 0.10;
 
     // Dead zone, then squared so small pushes are gentle while a full push still reaches 1
     public static double curve(double stick) {
@@ -79,7 +80,10 @@ public class drivetrain {
         double dx = x - lastX, dy = y - lastY;
         double dist = Math.hypot(dx, dy);
         double moveStep = Math.hypot(x, y) < Math.hypot(lastX, lastY) ? step * SLOW_DOWN_FACTOR : step;
-        if (dist <= moveStep) {
+        if (x == 0 && y == 0) {
+            // stick let go: stop driving at once (the motors brake)
+            lastX = lastY = 0;
+        } else if (dist <= moveStep) {
             lastX = x;
             lastY = y;
         } else {
@@ -89,7 +93,9 @@ public class drivetrain {
 
         double dr = rx - lastRx;
         double turnStep = Math.abs(rx) < Math.abs(lastRx) ? step * SLOW_DOWN_FACTOR : step;
-        lastRx = Math.abs(dr) <= turnStep ? rx : lastRx + Math.signum(dr) * turnStep;
+        if (rx == 0)                    lastRx = 0;   // turn stick let go: stop turning at once
+        else if (Math.abs(dr) <= turnStep) lastRx = rx;
+        else                            lastRx += Math.signum(dr) * turnStep;
     }
 
     private void setPowers(double x, double y, double rx) {

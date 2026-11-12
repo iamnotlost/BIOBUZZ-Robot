@@ -27,6 +27,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 - `driveTest` – drive base only. Hold a D-pad direction to spin a single wheel (up = frontLeft, right = frontRight, down = backRight, left = backLeft); each one should push the robot forward. Square switches field-/robot-centric.
 
 **Setup**
+- `setupAutoRed`, `setupAutoBlue` – teach the shooting auto: INIT on the start spot, drive, X saves the shoot spot, O saves the end spot, hold triangle test-shoots.
 - `settingsMenu` – change shot speeds, intake, drive speed, auto park distances and more with the D-pad, press X to save them on the robot (file `FIRST/biobuzz_settings.txt`). No re-upload needed. Nothing moves in this menu.
 
 **TeleOp**
@@ -35,6 +36,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 **Autonomous**
 - `leaveAuto` – drives 12 in. off the wall: LEAVE, 3 pts.
 - `parkRed`, `parkBlue` – LEAVE, then park in the LOADING ZONE: 8 pts. The park distances are placeholders; measure on a real field and set them in `baseParkAuto`.
+- `shootRed`, `shootBlue` – drive to the taught shoot spot, shoot all 4 pre-loaded POLLEN, drive to the taught end spot (put it in the LOADING ZONE, off the wall: LEAVE + PARK). Teach the spots with `setupAutoRed` / `setupAutoBlue`.
 
 ## TeleOp controls (gamepad 1)
 
@@ -46,21 +48,21 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Either trigger | Slow down gradually: the harder you squeeze, the slower (down to 25%) |
 | Options | Reset heading (point the robot away from you first) |
 | Share | Heading hold on/off (off by default; switches itself off if the heading reading looks wrong) |
-| Right bumper (R1) | Load on/off: intake only (slow); the feeder stays still so balls settle where it grips them |
-| Cross | Feeder pushes balls up on/off |
-| Circle | Intake and feeder backwards on/off (pull a ball back down / spit it out) |
-| Triangle | Shoot (close) on/off: the wheel spins up first, then the feeder pushes balls in only while the wheel is at full speed |
-| Square | Shoot (far) on/off, same as triangle |
-| Left bumper (L1) | Pre-spin the shooter on/off, so triangle fires instantly |
-| D-pad left/right | Pick the shot preset: CLOSE / MID / FAR (triangle shoots it, square always shoots FAR) |
-| Gamepad 2 D-pad left/right | Selected shot speed -/+ 20 |
+| Right bumper (R1) | **Hold** to load: intake only (slow); the feeder stays still so balls settle where it grips them |
+| Cross | **Hold**: feeder pushes balls up |
+| Circle | **Hold**: intake and feeder backwards (pull a ball back down / spit it out) |
+| Triangle | **Hold** to shoot: the wheel spins up first; the feeder runs only while the wheel is at the shot speed and stops after each ball until the wheel is back at speed, so every ball flies the same. Let go to stop |
+| Left bumper (L1) | **Hold** to pre-spin the shooter, so triangle fires sooner |
+| D-pad up/down | Shot stronger/weaker by 20, saved on the robot at once (one controller is enough to tune shots) |
+| Gamepad 2 D-pad left/right | Shot speed -/+ 20, saved at once |
 | Gamepad 2 cross | SAVE all settings on the robot |
-| D-pad up/down | Drive top speed up/down (starts at 40%) |
+| Click right stick | Drive top speed 40% → 60% → 80% → 100% → back to 40% (buzzes 1–4 times), remembered on the robot |
+| Gamepad 2 R1/L1 | Drive top speed up/down by 10%, remembered |
 | Gamepad 2 D-pad up/down | Intake speed up/down (starts at 300) |
 
 Driving is softened on purpose: small stick pushes move the robot gently, and it speeds up over about
-half a second (by time, not loop speed) instead of jerking. Speed changes made with the D-pad last until the robot app restarts;
-to make one permanent, change `MAX_SPEED` in `drivetrain.java` or `IN_VELOCITY` in `intake.java`.
+half a second (by time, not loop speed) instead of jerking. Letting go of a stick stops the robot at once. Shot and drive speed changes are saved at once. Intake
+speed changes are kept only after gamepad 2 cross (or saving in `settingsMenu`).
 
 While shooting, the robot writes wheel speed, feeding and battery voltage to its log about 20 times a
 second (tag `SHOT`), so a test session can be read back and the shot tuned from real numbers.

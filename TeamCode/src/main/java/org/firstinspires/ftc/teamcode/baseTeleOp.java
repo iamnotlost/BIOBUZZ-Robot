@@ -16,32 +16,43 @@ public abstract class baseTeleOp extends OpMode {
 
     protected abstract Alliance alliance();
 
-    boolean prevDPadUp, prevDPadDown, prevG2Up, prevG2Down;
-    boolean prevRBumper, prevLBumper;
+    boolean prevDPadUp, prevDPadDown, prevG2Up, prevG2Down, prevG2RBumper, prevG2LBumper;
     boolean prevDPadRight, prevDPadLeft;
     boolean prevOptions;
     // Start-up choices; changeable and saved in settingsMenu
     public static boolean FIELD_CENTRIC_DEFAULT = false;
     public static boolean HEADING_HOLD_DEFAULT  = false;
     boolean fieldCentric = false;
-    boolean prevLeftStickButton;
-    boolean prevTriangle, prevSquare, prevCross, prevCircle;
+    boolean prevLeftStickButton, prevRightStickButton;
+    // Drive top speeds the right stick click steps through
+    private static final double[] DRIVE_SPEED_LEVELS = {0.4, 0.6, 0.8, 1.0};
 
-    // Shooting: tap triangle (close) or square (far) to start, tap again to stop.
-    //   1. back off: feeder runs backwards briefly so no ball is pressed against the wheel
+    // Shooting: hold triangle, let go to stop. Every ball leaves at the same wheel speed, so every
+    // shot flies to the same height:
+    //   1. back off (optional): feeder runs backwards briefly so no ball is pressed against the wheel
     //   2. spin up: the wheel speeds up with nothing touching it
-    //   3. feed: the feeder pushes balls in only while the wheel is at speed, pausing after each ball
+    //   3. feed: the first ball goes in ONLY once the wheel is at SHOT_VELOCITY and steady. Then the
+    //      balls go one after another: after each ball the wheel control gets it back to speed (without
+    //      overshooting), and with WAIT_BETWEEN_BALLS the feeder pauses just until it is within
+    //      READY_TOLERANCE again (no extra wait), so every ball leaves at the same speed.
+    //      There is no "feed anyway" time limit: a ball never goes in while the wheel is too slow.
     // 0 = no back-off: balls are no longer pushed against the wheel while loading, and backing off
     // could knock a ball out of place. Raise (e.g. 0.3) if a ball ever sits against the wheel.
     public static double BACK_OFF_SECONDS = 0;
     // Feeder speed while R1 loads; 0 = feeder still so balls settle in place
     public static int FEED_WHILE_LOADING = 0;
-    // Three shot presets ("heights"): D-pad left/right picks one, triangle shoots it, square always shoots FAR
-    public static int CLOSE_SHOT_VELOCITY = 1320;
-    public static int MID_SHOT_VELOCITY   = 1590;
-    public static int FAR_SHOT_VELOCITY   = 1860;
-    private static final String[] PRESET_NAMES = {"CLOSE", "MID", "FAR"};
-    private int selectedPreset = 0;
+    // The one shot speed (ticks/s). D-pad up/down changes it by 20 and saves it.
+    // (2026-11-12: lowered from 1420; the team had tuned 1360 on the field, then asked for a bit slower)
+    public static int SHOT_VELOCITY = 1320;
+    // This far below the shot speed = a ball just hit the wheel: stop feeding until it is back at speed
+    public static double DROP_TOLERANCE = 80;
+    // true: after each ball the feeder pauses until the wheel is back at speed (same height, a tiny bit slower)
+    // false: after the first ball the feeder never stops (fastest, later balls may fly lower). In settingsMenu.
+    public static boolean WAIT_BETWEEN_BALLS = true;
+    private boolean wasDip = false;
+    // Waiting longer than this for the wheel = it cannot reach SHOT_VELOCITY (too high, or battery low)
+    private static final double CANT_REACH_SECONDS = 2.0;
+    private int ballsShot = 0;
     private String savedMessage = "";
     private final ElapsedTime savedMessageTimer = new ElapsedTime();
     boolean prevG2Left, prevG2Right, prevG2Cross;
@@ -53,13 +64,8 @@ public abstract class baseTeleOp extends OpMode {
     // leaves at the same speed instead of catching the wheel while it speeds up or overshoots
     public static double READY_TOLERANCE = 50;
     public static double SETTLE_MS = 100;
-    private static final double DROP_TOLERANCE  = 150;  // this far below = a ball just went through, wait
-    // If the wheel never quite reaches its target, feed anyway after these times
-    public static double SPINUP_TIMEOUT_SECONDS  = 1.5;
-    public static double RECOVER_TIMEOUT_SECONDS = 1.0;
 
-    private static final int NOT_SHOOTING = 0, SHOOT_CLOSE = 1, SHOOT_FAR = 2;
-    int shootMode = NOT_SHOOTING; // triangle / square
+    boolean shooting = false;     // triangle
     boolean loading = false;      // R1
     boolean preSpin = false;      // L1
     boolean feedingUp = false;    // cross
@@ -70,7 +76,6 @@ public abstract class baseTeleOp extends OpMode {
     private final ElapsedTime shotLogTimer = new ElapsedTime();
     public static final int SHOT_SPEED_STEP = 20;
     private boolean firstBall = true;
-    private double feedStartVelocity = 0;
     // last speeds sent, so motors are only told when something changes
     private int lastFeeder = 0;
     private int lastIntake = 0;   // 1 in, -1 out, 0 stopped
@@ -174,7 +179,6 @@ public abstract class baseTeleOp extends OpMode {
             return;
         }
 
-        shooter.update();
         buttonPressed = hwManager.buttonPressed();
 
         boolean opponentNectar = hwManager.elementSensor.isOpponentNectar(alliance());
@@ -255,15 +259,24 @@ public abstract class baseTeleOp extends OpMode {
         }
         prevShare = gamepad1.share;
 
-        // Live tuning: gamepad 1 D-pad up/down = drive top speed, gamepad 2 D-pad up/down = intake speed
-        if (gamepad1.dpad_up && !prevDPadUp)     drivetrain.adjustMaxSpeed(1);
-        if (gamepad1.dpad_down && !prevDPadDown) drivetrain.adjustMaxSpeed(-1);
+        // Gamepad 1 D-pad up/down: shot stronger/weaker by 20, saved on the robot at once,
+        // so shots can be tuned with one controller
+        if (gamepad1.dpad_up && !prevDPadUp)     changeShotSpeed(SHOT_SPEED_STEP);
+        if (gamepad1.dpad_down && !prevDPadDown) changeShotSpeed(-SHOT_SPEED_STEP);
+        // Gamepad 2: D-pad up/down = intake speed, R1/L1 = drive top speed
         if (gamepad2.dpad_up && !prevG2Up)       intake.adjustSpeed(1);
         if (gamepad2.dpad_down && !prevG2Down)   intake.adjustSpeed(-1);
-        prevDPadUp   = gamepad1.dpad_up;
-        prevDPadDown = gamepad1.dpad_down;
-        prevG2Up     = gamepad2.dpad_up;
-        prevG2Down   = gamepad2.dpad_down;
+        if (gamepad2.right_bumper && !prevG2RBumper) { drivetrain.adjustMaxSpeed(1);  saveSettings(); }
+        if (gamepad2.left_bumper && !prevG2LBumper)  { drivetrain.adjustMaxSpeed(-1); saveSettings(); }
+        // Click the right stick: drive top speed 40 -> 60 -> 80 -> 100% -> back to 40%, remembered on the robot
+        if (gamepad1.right_stick_button && !prevRightStickButton) nextDriveSpeed();
+        prevRightStickButton = gamepad1.right_stick_button;
+        prevDPadUp    = gamepad1.dpad_up;
+        prevDPadDown  = gamepad1.dpad_down;
+        prevG2Up      = gamepad2.dpad_up;
+        prevG2Down    = gamepad2.dpad_down;
+        prevG2RBumper = gamepad2.right_bumper;
+        prevG2LBumper = gamepad2.left_bumper;
 
         if (PRESET_TURNS_ENABLED && gamepad1.dpad_right && !prevDPadRight) {
             currentTargetHeading = targetHeadingFarRad;
@@ -274,60 +287,46 @@ public abstract class baseTeleOp extends OpMode {
             autoRotating = true;
         }
 
-        // Gamepad 1 D-pad left/right: pick the shot preset (CLOSE / MID / FAR) that triangle shoots
-        if (!PRESET_TURNS_ENABLED) {
-            if (gamepad1.dpad_right && !prevDPadRight) selectedPreset = Math.min(2, selectedPreset + 1);
-            if (gamepad1.dpad_left && !prevDPadLeft)   selectedPreset = Math.max(0, selectedPreset - 1);
-        }
-
-        // Gamepad 2 at the field: D-pad left/right = selected shot speed -/+ 20, cross = SAVE all settings
+        // Gamepad 2 at the field: D-pad left/right = shot speed -/+ 20 (saved at once), cross = SAVE all settings
         int g2Step = (gamepad2.dpad_right && !prevG2Right ? SHOT_SPEED_STEP : 0)
                    - (gamepad2.dpad_left && !prevG2Left ? SHOT_SPEED_STEP : 0);
-        if (g2Step != 0) setPresetVelocity(selectedPreset, presetVelocity(selectedPreset) + g2Step);
-        if (gamepad2.cross && !prevG2Cross) {
-            boolean ok = settings.save();
-            savedMessage = ok ? "SAVED" : "SAVE FAILED";
-            savedMessageTimer.reset();
-            gamepad2.rumble(ok ? 200 : 800);
-        }
+        if (g2Step != 0) changeShotSpeed(g2Step);
+        if (gamepad2.cross && !prevG2Cross) gamepad2.rumble(saveSettings() ? 200 : 800);
         prevG2Left  = gamepad2.dpad_left;
         prevG2Right = gamepad2.dpad_right;
         prevG2Cross = gamepad2.cross;
 
         handleBalls();
+        shooter.update();   // after handleBalls, so the wheel gets this loop's target at once
         showDriverScreen();
 
-        prevRBumper   = gamepad1.right_bumper;
-        prevLBumper   = gamepad1.left_bumper;
         prevDPadRight = gamepad1.dpad_right;
         prevDPadLeft  = gamepad1.dpad_left;
         prevOptions   = gamepad1.options;
     }
 
-    // Intake, feeder and shooter. Every button is tap on / tap off. Shooting wins over everything
-    // else; circle (backwards) turns off loading and cross.
+    // Intake, feeder and shooter. Every ball button works while it is HELD and stops when you let go.
+    // Shooting wins over everything else; circle (backwards) wins over R1 and cross.
     private void handleBalls() {
-        boolean triangle = gamepad1.triangle && !prevTriangle;
-        boolean square   = gamepad1.square && !prevSquare;
-        boolean cross    = gamepad1.cross && !prevCross;
-        boolean circle   = gamepad1.circle && !prevCircle;
-        prevTriangle = gamepad1.triangle;
-        prevSquare   = gamepad1.square;
-        prevCross    = gamepad1.cross;
-        prevCircle   = gamepad1.circle;
+        preSpin   = gamepad1.left_bumper;
+        reversing = gamepad1.circle;
+        loading   = gamepad1.right_bumper && !reversing;
+        feedingUp = gamepad1.cross && !reversing;
 
-        if (gamepad1.left_bumper && !prevLBumper) preSpin = !preSpin;
+        boolean wasShooting = shooting;
+        shooting = gamepad1.triangle;
 
-        int wasShooting = shootMode;
-        if (triangle) shootMode = shootMode == SHOOT_CLOSE ? NOT_SHOOTING : SHOOT_CLOSE;
-        if (square)   shootMode = shootMode == SHOOT_FAR   ? NOT_SHOOTING : SHOOT_FAR;
-
-        if (shootMode != NOT_SHOOTING) {
-            int target = shootMode == SHOOT_FAR ? FAR_SHOT_VELOCITY : presetVelocity(selectedPreset);
-            if (wasShooting == NOT_SHOOTING) {
+        if (shooting) {
+            int target = SHOT_VELOCITY;
+            if (!wasShooting) {
+                // a fresh start every time: wait for the wheel before the first ball goes in
                 feedingShot = false;
-                loading = feedingUp = reversing = false;
+                firstBall = true;
+                wasInWindow = false;
+                wasDip = true;
+                ballsShot = 0;
                 shotTimer.reset();
+                waitTimer.reset();
             }
             shooter.spinTo(target);
             ballStatus = "going into the shooter";
@@ -338,52 +337,50 @@ public abstract class baseTeleOp extends OpMode {
                 setFeeder(-REVERSE_VELOCITY);
                 setIntake(0);
                 waitTimer.reset();
-                firstBall = true;
                 shooterStatus = "backing balls off";
                 return;
             }
-            // step 2: wait until the wheel is (nearly) at speed, or give up waiting after a time limit
+            // step 2: the wheel must be at speed (within READY_TOLERANCE) and stay there SETTLE_MS
             boolean inWindow = Math.abs(vel - target) <= READY_TOLERANCE;
             if (inWindow && !wasInWindow) settleTimer.reset();
             wasInWindow = inWindow;
             boolean ready = inWindow && settleTimer.milliseconds() >= SETTLE_MS;
-            double waitLimit = firstBall ? SPINUP_TIMEOUT_SECONDS : RECOVER_TIMEOUT_SECONDS;
-            if (!feedingShot && (ready || waitTimer.seconds() >= waitLimit)) {
-                if (firstBall) gamepad1.rumble(200); // short buzz: the first ball is going in
-                feedingShot = true;
-                firstBall = false;
-                feedStartVelocity = vel;
-                waitTimer.reset();
-            } else if (feedingShot && waitTimer.seconds() > 0.15 && vel < feedStartVelocity - DROP_TOLERANCE) {
-                // step 3 pause: a ball just took speed off the wheel, let it recover before the next one
+            // a ball hitting the wheel = a sudden drop below the shot speed
+            boolean dip = vel < target - DROP_TOLERANCE;
+            if (dip && !wasDip && !firstBall) ballsShot++;
+            wasDip = dip;
+            if (!feedingShot) {
+                // first ball: wheel at speed and steady. Next balls: as soon as it is back up to speed
+                boolean go = firstBall ? ready : inWindow;
+                if (go) {
+                    if (firstBall) gamepad1.rumble(200); // short buzz: the first ball is going in
+                    feedingShot = true;
+                    firstBall = false;
+                }
+            } else if (WAIT_BETWEEN_BALLS && dip) {
+                // step 3 pause: a ball just hit the wheel and slowed it. Stop feeding at once so the
+                // next ball waits the moment it takes the wheel to get back to speed.
                 feedingShot = false;
                 waitTimer.reset();
             }
-            // nothing reaches the wheel before it is at speed
+            shooter.setLearning(firstBall);  // learn the holding power only before the burst starts
             setFeeder(feedingShot ? SHOT_FEED_VELOCITY : 0);
             setIntake(feedingShot ? 1 : 0);
             logShot(target, vel);
-            shooterStatus = String.format("%s  %.0f / %d  (tap %s again to stop)",
-                    feedingShot ? "SHOOTING" : "spinning up", vel, target, shootMode == SHOOT_FAR ? "square" : "triangle");
+            if (feedingShot) {
+                shooterStatus = String.format("SHOOTING  %.0f / %d  (balls: %d)", vel, target, ballsShot);
+            } else if (waitTimer.seconds() > CANT_REACH_SECONDS) {
+                shooterStatus = String.format("wheel CAN'T REACH %d (at %.0f) - D-pad down or new battery", target, vel);
+            } else {
+                shooterStatus = String.format("waiting for wheel  %.0f / %d  (balls: %d)", vel, target, ballsShot);
+            }
             return;
         }
 
-        if (wasShooting != NOT_SHOOTING) feedingShot = false;
-        if (preSpin) shooter.spinTo(presetVelocity(selectedPreset));
+        if (wasShooting) feedingShot = false;
+        shooter.setLearning(true);
+        if (preSpin) shooter.spinTo(SHOT_VELOCITY);
         else shooter.turnOff();
-
-        if (gamepad1.right_bumper && !prevRBumper) {
-            loading = !loading;
-            if (loading) reversing = false;
-        }
-        if (cross) {
-            feedingUp = !feedingUp;
-            if (feedingUp) reversing = false;
-        }
-        if (circle) {
-            reversing = !reversing;
-            if (reversing) loading = feedingUp = false;
-        }
 
         if (reversing) {
             setIntake(-1);
@@ -420,26 +417,26 @@ public abstract class baseTeleOp extends OpMode {
 
         if (preSpin) {
             double vel = hwManager.shooterVelocity();
-            boolean ready = Math.abs(vel - presetVelocity(selectedPreset)) <= READY_TOLERANCE;
+            boolean ready = Math.abs(vel - SHOT_VELOCITY) <= READY_TOLERANCE;
             if (ready && !readyRumbled) gamepad1.rumble(200); // short buzz: wheel is up to speed
             readyRumbled = ready || readyRumbled;
-            shooterStatus = ready ? "READY - tap triangle" : String.format("pre-spinning %.0f / %d", vel, presetVelocity(selectedPreset));
+            shooterStatus = ready ? "READY - hold triangle" : String.format("pre-spinning %.0f / %d", vel, SHOT_VELOCITY);
         } else {
             readyRumbled = false;
             shooterStatus = "off";
         }
-        ballStatus = reversing ? "BACKWARDS (circle to stop)" : feedingUp ? "pushing up (cross to stop)"
-                : loading ? (unjamming ? "unjamming..." : "loading (R1 to stop)") : "stopped";
+        ballStatus = reversing ? "BACKWARDS" : feedingUp ? "pushing up"
+                : loading ? (unjamming ? "unjamming..." : "loading") : "stopped (hold R1 to load)";
     }
 
     // Shot recorder: while shooting, writes one line about every 50 ms to the robot log (tag SHOT) so a
     // test session can be read back afterwards. Columns: seconds since start, target, wheel speed,
-    // feeding (1/0), battery volts.
+    // feeding (1/0), battery volts, shooter motor power.
     private void logShot(int target, double vel) {
         if (shotLogTimer.milliseconds() < 50) return;
         shotLogTimer.reset();
-        RobotLog.ii("SHOT", "%.2f,%d,%.0f,%d,%.2f", shotTimer.seconds(), target, vel,
-                feedingShot ? 1 : 0, hwManager.batteryVoltage());
+        RobotLog.ii("SHOT", "%.2f,%d,%.0f,%d,%.2f,%.2f", shotTimer.seconds(), target, vel,
+                feedingShot ? 1 : 0, hwManager.batteryVoltage(), shooter.power());
     }
 
     // Only what a driver needs during a match
@@ -450,14 +447,13 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.addData("Time", time);
         telemetry.addData("Shooter", shooterStatus);
         telemetry.addData("Balls", ballStatus);
-        telemetry.addData("Shot", "%s %d  (D-pad L/R: switch)   pad 2 L/R: adjust, X: save %s",
-                PRESET_NAMES[selectedPreset], presetVelocity(selectedPreset),
-                savedMessageTimer.seconds() < 3 ? "- " + savedMessage : "");
+        telemetry.addData("Shot speed", "%d  (D-pad up/down: stronger/weaker) %s", SHOT_VELOCITY,
+                savedMessageTimer.seconds() < 3 && !savedMessage.isEmpty() ? "- " + savedMessage : "");
         telemetry.addData("Intake speed", "%d  (gamepad 2 D-pad up/down)", intake.IN_VELOCITY);
         telemetry.addData("Battery", "%.1f V", hwManager.batteryVoltage());
         if (hwManager.pinpointFailed) telemetry.addData("!!", "Pinpoint lost - check its cable. Robot-centric only until restart");
-        if (prevOpponentNectar) telemetry.addData("!!", "OPPONENT NECTAR - tap circle to spit it out");
-        telemetry.addData("Driving", "%s, top speed %.0f%%  (L-stick click / D-pad)",
+        if (prevOpponentNectar) telemetry.addData("!!", "OPPONENT NECTAR - hold circle to spit it out");
+        telemetry.addData("Driving", "%s, top speed %.0f%%  (L-stick click: mode, R-stick click: speed)",
                 fieldCentric ? "FIELD-centric" : "ROBOT-centric", drivetrain.MAX_SPEED * 100);
         telemetry.addData("Heading hold", headingHoldEnabled ? "on (Share)" : holdGaveUp
                 ? "OFF - it had to turn too far, heading reading looks wrong (Share to retry)" : "off (Share)");
@@ -465,15 +461,28 @@ public abstract class baseTeleOp extends OpMode {
         telemetry.update();
     }
 
-    private int presetVelocity(int preset) {
-        return preset == 2 ? FAR_SHOT_VELOCITY : preset == 1 ? MID_SHOT_VELOCITY : CLOSE_SHOT_VELOCITY;
+    // Shot faster (+) or slower (-), then saved so it is kept after a restart
+    private void changeShotSpeed(int step) {
+        SHOT_VELOCITY = Math.max(200, Math.min(2800, SHOT_VELOCITY + step));
+        if (!saveSettings()) gamepad1.rumble(800); // long buzz: could not save
     }
 
-    private void setPresetVelocity(int preset, int velocity) {
-        velocity = Math.max(200, Math.min(2800, velocity));
-        if (preset == 2)      FAR_SHOT_VELOCITY = velocity;
-        else if (preset == 1) MID_SHOT_VELOCITY = velocity;
-        else                  CLOSE_SHOT_VELOCITY = velocity;
+    // Next faster level, or back to the slowest after 100%. Buzzes 1-4 times = level 1-4.
+    private void nextDriveSpeed() {
+        int next = 0;
+        for (int i = 0; i < DRIVE_SPEED_LEVELS.length; i++) {
+            if (DRIVE_SPEED_LEVELS[i] > drivetrain.MAX_SPEED + 0.01) { next = i; break; }
+        }
+        drivetrain.MAX_SPEED = DRIVE_SPEED_LEVELS[next];
+        gamepad1.rumbleBlips(next + 1);
+        saveSettings();
+    }
+
+    private boolean saveSettings() {
+        boolean ok = settings.save();
+        savedMessage = ok ? "SAVED" : "SAVE FAILED";
+        savedMessageTimer.reset();
+        return ok;
     }
 
     private void setFeeder(int velocity) {
@@ -503,8 +512,7 @@ public abstract class baseTeleOp extends OpMode {
         shooter.turnOff();
         supply.turnOff();
         intake.stop();
-        loading = preSpin = feedingShot = feedingUp = reversing = false;
-        shootMode = NOT_SHOOTING;
+        loading = preSpin = feedingShot = feedingUp = reversing = shooting = false;
         lastFeeder = lastIntake = 0;
         autoRotating      = false;
         headingHoldActive = false;

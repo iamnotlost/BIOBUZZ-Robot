@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.hardware.DigitalChannel;
 import com.qualcomm.robotcore.hardware.HardwareMap;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.VoltageSensor;
+import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
@@ -65,17 +66,19 @@ public class hwManager {
             intake.setDirection(DcMotor.Direction.FORWARD); // FORWARD = pulls balls in on this robot
         }
 
+        // Both shooter motors get plain power from the shooter class (one controller for both);
+        // the shooter motor's encoder still reads the wheel speed
         shooter = find(DcMotorEx.class, SHOOTER);
         if (shooter != null) {
             shooter.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
-            shooter.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
+            shooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             shooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
             shooter.setDirection(DcMotorSimple.Direction.REVERSE);
-            shooter.setVelocityPIDFCoefficients(25, 0, 0, 12.8);
         }
 
         secondShooter = find(DcMotorEx.class, SECOND_SHOOTER);
         if (secondShooter != null) {
+            secondShooter.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
             secondShooter.setDirection(DcMotorSimple.Direction.FORWARD);
             secondShooter.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.FLOAT);
         }
@@ -166,14 +169,21 @@ public class hwManager {
         return button != null && !button.getState();
     }
 
-    // Lowest voltage any hub sees (the battery under load), or 0 if none report
+    // Lowest voltage any hub sees (the battery under load), or 0 if none report. Each reading is a
+    // separate message to every hub (slow), so it is read at most every 0.2 s and remembered in between.
+    private double lastVoltage = 0;
+    private final ElapsedTime voltageTimer = new ElapsedTime();
+
     public double batteryVoltage() {
+        if (lastVoltage > 0 && voltageTimer.seconds() < 0.2) return lastVoltage;
+        voltageTimer.reset();
         double min = Double.MAX_VALUE;
         for (VoltageSensor sensor : hardwareMap.voltageSensor) {
             double v = sensor.getVoltage();
             if (v > 0) min = Math.min(min, v);
         }
-        return min == Double.MAX_VALUE ? 0 : min;
+        lastVoltage = min == Double.MAX_VALUE ? 0 : min;
+        return lastVoltage;
     }
 
     public double intakeVelocity() {

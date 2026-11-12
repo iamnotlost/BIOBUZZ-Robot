@@ -17,6 +17,7 @@ public class settingsMenu extends OpMode {
     private double nextRepeat = 0.4;
     private String message = "";
     private boolean unsaved = false;
+    private static final int SHOWN = 12;
 
     @Override
     public void init() {
@@ -81,10 +82,16 @@ public class settingsMenu extends OpMode {
         telemetry.addLine("D-pad up/down: pick   left/right: change   X: SAVE   Triangle: default   O: reload");
         telemetry.addLine(unsaved ? "* not saved yet - press X *" : message);
         telemetry.addLine();
-        for (int i = 0; i < settings.ITEMS.size(); i++) {
+        // Only about 12 lines fit on the Driver Hub: show the ones around the selected setting
+        int n = settings.ITEMS.size();
+        int first = Math.max(0, Math.min(n - SHOWN, selected - SHOWN / 2));
+        int last = Math.min(n, first + SHOWN);
+        telemetry.addLine(String.format("(%d of %d)%s", selected + 1, n, first > 0 ? "   ^ more above" : ""));
+        for (int i = first; i < last; i++) {
             settings.Item item = settings.ITEMS.get(i);
             telemetry.addLine((i == selected ? ">> " : "   ") + item.label + ":  " + item.text());
         }
+        if (last < n) telemetry.addLine("   v more below");
         telemetry.update();
     }
 }

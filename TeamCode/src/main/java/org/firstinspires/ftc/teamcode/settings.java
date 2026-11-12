@@ -50,12 +50,10 @@ public class settings {
 
     public static final List<Item> ITEMS = new ArrayList<>();
     static {
-        ITEMS.add(new Item("shotClose", "Shot speed CLOSE", 20, 200, 2800, true,
-                () -> baseTeleOp.CLOSE_SHOT_VELOCITY, v -> baseTeleOp.CLOSE_SHOT_VELOCITY = (int) v));
-        ITEMS.add(new Item("shotMid", "Shot speed MID", 20, 200, 2800, true,
-                () -> baseTeleOp.MID_SHOT_VELOCITY, v -> baseTeleOp.MID_SHOT_VELOCITY = (int) v));
-        ITEMS.add(new Item("shotFar", "Shot speed FAR", 20, 200, 2800, true,
-                () -> baseTeleOp.FAR_SHOT_VELOCITY, v -> baseTeleOp.FAR_SHOT_VELOCITY = (int) v));
+        ITEMS.add(new Item("shot", "Shot speed", 20, 200, 2800, true,
+                () -> baseTeleOp.SHOT_VELOCITY, v -> baseTeleOp.SHOT_VELOCITY = (int) v));
+        ITEMS.add(new Item("shotWait", "Shot: wait for wheel between balls", 1, 0, 1, true,
+                () -> baseTeleOp.WAIT_BETWEEN_BALLS ? 1 : 0, v -> baseTeleOp.WAIT_BETWEEN_BALLS = v >= 0.5));
         ITEMS.add(new Item("shotFeed", "Feeder speed when shooting", 100, 100, 2800, true,
                 () -> baseTeleOp.SHOT_FEED_VELOCITY, v -> baseTeleOp.SHOT_FEED_VELOCITY = (int) v));
         ITEMS.add(new Item("shotWindow", "Shot ready window (+/-)", 10, 10, 300, true,
@@ -84,6 +82,17 @@ public class settings {
                 () -> baseParkAuto.PARK_FORWARD, v -> baseParkAuto.PARK_FORWARD = v));
         ITEMS.add(new Item("parkSide", "Auto park: sideways (in, + = left on red)", 1, -72, 72, true,
                 () -> baseParkAuto.PARK_SIDE, v -> baseParkAuto.PARK_SIDE = v));
+        // Shooting auto spots (normally saved by setupAutoRed / setupAutoBlue)
+        addSpot("redShoot",  "RED shoot spot",  autoSpots.RED_SHOOT);
+        addSpot("redEnd",    "RED end spot",    autoSpots.RED_END);
+        addSpot("blueShoot", "BLUE shoot spot", autoSpots.BLUE_SHOOT);
+        addSpot("blueEnd",   "BLUE end spot",   autoSpots.BLUE_END);
+    }
+
+    private static void addSpot(String key, String label, double[] spot) {
+        ITEMS.add(new Item(key + "X", label + ": ahead (in)", 1, -144, 144, true, () -> spot[0], v -> spot[0] = v));
+        ITEMS.add(new Item(key + "Y", label + ": left (in)", 1, -144, 144, true, () -> spot[1], v -> spot[1] = v));
+        ITEMS.add(new Item(key + "H", label + ": turn (deg)", 5, -180, 180, true, () -> spot[2], v -> spot[2] = v));
     }
 
     // Copies saved values into the robot code. Missing file or values = code defaults. Returns false on error.

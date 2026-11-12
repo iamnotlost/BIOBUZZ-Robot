@@ -2,7 +2,7 @@ package org.firstinspires.ftc.teamcode;
 
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 
-@Autonomous(name="parkRed", group = "BIOBUZZ")
+@Autonomous(name="parkRed", group = "BIOBUZZ", preselectTeleOp = "redTeleOp")
 public class parkRed extends baseParkAuto {
     @Override
     protected Alliance alliance() {

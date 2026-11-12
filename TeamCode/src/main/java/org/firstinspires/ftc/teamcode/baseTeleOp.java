@@ -76,7 +76,7 @@ public abstract class baseTeleOp extends OpMode {
     private final ElapsedTime shotTimer = new ElapsedTime();
     private final ElapsedTime waitTimer = new ElapsedTime();
     private final ElapsedTime shotLogTimer = new ElapsedTime();
-    public static final int SHOT_SPEED_STEP = 20;
+    public static final int SHOT_SPEED_STEP = 10;   // 10: 1200 hit the rim and 1220 bounced out, 1210 is in between
     private boolean firstBall = true;
     // last speeds sent, so motors are only told when something changes
     private int lastFeeder = 0;
@@ -267,7 +267,7 @@ public abstract class baseTeleOp extends OpMode {
         }
         prevShare = gamepad1.share;
 
-        // Gamepad 1 D-pad up/down: shot stronger/weaker by 20, saved on the robot at once,
+        // Gamepad 1 D-pad up/down: shot stronger/weaker by 10, saved on the robot at once,
         // so shots can be tuned with one controller
         if (gamepad1.dpad_up && !prevDPadUp)     changeShotSpeed(SHOT_SPEED_STEP);
         if (gamepad1.dpad_down && !prevDPadDown) changeShotSpeed(-SHOT_SPEED_STEP);
@@ -295,7 +295,7 @@ public abstract class baseTeleOp extends OpMode {
             autoRotating = true;
         }
 
-        // Gamepad 2 at the field: D-pad left/right = shot speed -/+ 20 (saved at once), cross = SAVE all settings
+        // Gamepad 2 at the field: D-pad left/right = shot speed -/+ 10 (saved at once), cross = SAVE all settings
         int g2Step = (gamepad2.dpad_right && !prevG2Right ? SHOT_SPEED_STEP : 0)
                    - (gamepad2.dpad_left && !prevG2Left ? SHOT_SPEED_STEP : 0);
         if (g2Step != 0) changeShotSpeed(g2Step);

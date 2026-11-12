@@ -52,6 +52,12 @@ public abstract class baseShootAuto extends baseAuto {
                 telemetry.addLine("!! PLAN " + autoSpots.planName(p) + " NOT SET UP - run " + setupName
                         + " (it would only shoot from the start and drive straight off the wall)");
             }
+            for (double[] s : new double[][] {autoSpots.shoot(alliance(), p), autoSpots.end(alliance(), p)}) {
+                if (Math.hypot(s[0], s[1]) > MAX_SPOT_IN) {
+                    telemetry.addLine(String.format("!! a spot is %.0f ft from START - taught wrong, run %s again (it won't drive there)",
+                            Math.hypot(s[0], s[1]) / 12, setupName));
+                }
+            }
             telemetry.addData("Shot speed", "%d", baseTeleOp.SHOT_VELOCITY);
             double volts = hwManager.batteryVoltage();
             telemetry.addData("Battery", "%.1f V%s", volts, volts < 12.5 ? "  !! LOW - charge or swap" : "");

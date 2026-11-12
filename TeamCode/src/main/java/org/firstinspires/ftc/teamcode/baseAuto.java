@@ -23,6 +23,8 @@ public abstract class baseAuto extends LinearOpMode {
     public static final double AUTO_SECONDS = 30;
     // Stop moving this long before AUTO ends so nothing is still powered at 0:00 (G403)
     public static double SAFETY_MARGIN_S = 1.0;
+    // Never drive to a taught spot farther than this from the start (inches): it must have been taught wrong
+    public static double MAX_SPOT_IN = 100;
     private static final int EVENTS_SHOWN = 7;
 
     hwManager hwManager;
@@ -134,6 +136,13 @@ public abstract class baseAuto extends LinearOpMode {
     // Drives to a spot {x in, y in, heading deg}, turning on the way. Gives up after maxSeconds.
     // Logs how far off it ended up. Returns false if it gave up (blocked?) or AUTO ran out of time.
     protected boolean goTo(String name, double[] spot, double maxSeconds) {
+        // Safety net: a spot this far from the start was taught wrong (it once was 103 in to the side and the
+        // robot drove across the field). Don't drive there at all.
+        double far = Math.hypot(spot[0], spot[1]);
+        if (far > MAX_SPOT_IN) {
+            event(String.format("%s is %.0f in from START - too far, NOT driving there (teach it again)", name, far));
+            return false;
+        }
         targetName = name;
         target = spot;
         event(String.format("drive to %s (%.0f, %.0f, %.0f deg)", name, spot[0], spot[1], spot[2]));

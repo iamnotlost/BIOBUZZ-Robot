@@ -7,15 +7,18 @@ import com.qualcomm.robotcore.util.RobotLog;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-// Teach the shooting auto where to go: put the robot on its START spot, INIT, then drive it by hand.
+// Teach the shooting auto where to go. INIT anywhere, press START, then drive the robot by hand:
+//   Square (□)                 1. START is here   (robot on its start spot, touching the wall)
+//   Cross (X)                  2. SHOOT here      (press it right at the start to shoot without driving)
+//   Circle (O)                 3. LOADING ZONE    (end spot: partly in the LOADING ZONE, NOT touching the wall)
 //   Left stick / right stick   drive / turn (half speed; hold a trigger for quarter speed)
-//   Cross (X)                  SAVE this as the SHOOT spot
-//   Circle (O)                 SAVE this as the END spot (in your LOADING ZONE, NOT touching the wall)
 //   Hold triangle              shoot from here, to check the aim (same burst as the auto)
 //   Hold R1                    intake, to load balls again for another test
-// Positions come from the same odometry the auto uses, measured from where the robot was at INIT.
-// Park-only version (setupParkRed / setupParkBlue): start on the CORNER start spot, drive into the LOADING ZONE,
-// Circle (O) saves the SAFE PARK spot used by parkRed / parkBlue. Cross and triangle do nothing there.
+// SHOOT and LOADING ZONE are saved measured from where you pressed □, so it does not matter where the robot was
+// at INIT. (Before □ existed the start was the INIT spot, and spots taught after INIT somewhere else ended up
+// 100 inches off.) Positions come from the same odometry the auto uses.
+// Park-only version (setupParkRed / setupParkBlue): □ on the CORNER start spot, O in the LOADING ZONE saves the
+// SAFE PARK spot used by parkRed / parkBlue.
 public abstract class baseSetupAuto extends OpMode {
     protected abstract Alliance alliance();
 
@@ -26,6 +29,8 @@ public abstract class baseSetupAuto extends OpMode {
 
     public static double DRIVE_SCALE = 0.5;
     public static double SLOW_SCALE  = 0.25;
+    // A spot this far from START is probably a mistake (START pressed in the wrong place?)
+    public static double FAR_IN = 84;
 
     hwManager hwManager;
     shooter shooter;
@@ -34,9 +39,11 @@ public abstract class baseSetupAuto extends OpMode {
     burst burst;
     Follower follower;
 
-    private boolean prevCross, prevCircle, prevTriangle;
+    private boolean prevCross, prevCircle, prevTriangle, prevSquare, prevLeft, prevRight;
     private boolean loading = false;
     private String message = "";
+    private Pose startPose = null;          // where □ was pressed
+    private boolean shootSaved = false, endSaved = false;
 
     @Override
     public void init() {
@@ -51,8 +58,6 @@ public abstract class baseSetupAuto extends OpMode {
         follower.setStartingPose(new Pose(0, 0, 0));
     }
 
-    private boolean prevLeft, prevRight;
-
     @Override
     public void init_loop() {
         follower.update();
@@ -63,14 +68,10 @@ public abstract class baseSetupAuto extends OpMode {
             prevLeft = gamepad1.dpad_left;
             prevRight = gamepad1.dpad_right;
         }
-        telemetry.addLine(parkOnly() ? "SETUP SAFE PARK " + alliance()
-                : "SETUP SHOOT AUTO " + alliance() + "   PLAN " + autoSpots.planName(autoSpots.plan)
-                  + "   (D-pad left = A, right = B)");
-        telemetry.addLine("1. Robot on its " + (parkOnly() ? "CORNER " : "plan " + autoSpots.planName(autoSpots.plan) + " ")
-                + "START spot: touching the wall, on your side, NOT in the LOADING ZONE.");
-        telemetry.addLine("2. Keep it STILL now (odometry calibrating), then press START.");
-        telemetry.addLine("Mark the start spot with tape: the auto must start exactly here every match.");
-        showSpots();
+        telemetry.addLine(title() + (parkOnly() ? "" : "   (D-pad left = plan A, right = plan B)"));
+        telemetry.addLine("Keep the robot STILL during INIT (odometry calibrating), then press START (play).");
+        telemetry.addLine("Then: drive to the START spot and press SQUARE.");
+        showSaved();
         telemetry.update();
     }
 
@@ -94,21 +95,40 @@ public abstract class baseSetupAuto extends OpMode {
         follower.setTeleOpDrive(fwdCmd, leftCmd, turnCmd, true);
 
         Pose p = follower.getPose();
-        double headingDeg = Math.toDegrees(Math.atan2(Math.sin(p.getHeading()), Math.cos(p.getHeading())));
         checkOdometry(p, fwdCmd, leftCmd, turnCmd);
 
-        if (parkOnly()) {
-            if (gamepad1.circle && !prevCircle) message = save(autoSpots.park(alliance()), p, headingDeg, "SAFE PARK");
-        } else {
-            int plan = autoSpots.plan;
-            if (gamepad1.cross && !prevCross) {
-                message = save(autoSpots.shoot(alliance(), plan), p, headingDeg, "PLAN " + autoSpots.planName(plan) + " SHOOT");
+        // 1. START
+        if (gamepad1.square && !prevSquare) {
+            startPose = p;
+            shootSaved = endSaved = false;
+            gamepad1.rumble(200);
+            RobotLog.ii("SETUP", "%s %s START set (odometry check: %s, battery %.1f V)",
+                    alliance(), parkOnly() ? "PARK" : "PLAN " + autoSpots.planName(autoSpots.plan),
+                    odometryText(), hwManager.batteryVoltage());
+            message = parkOnly() ? "START set. Now drive into the LOADING ZONE (not touching the wall) and press O."
+                    : "START set. Now drive to where it should shoot and press X (or X right here to shoot from the start).";
+        }
+        // 2. SHOOT and 3. LOADING ZONE (only after START)
+        boolean cross = gamepad1.cross && !prevCross, circle = gamepad1.circle && !prevCircle;
+        if ((cross && !parkOnly()) || circle) {
+            if (startPose == null) {
+                message = "!! First put the robot on its START spot and press SQUARE.";
+                gamepad1.rumble(800);
+            } else if (parkOnly()) {
+                message = save(autoSpots.park(alliance()), p, "SAFE PARK");
+                endSaved = true;
+            } else if (cross) {
+                int plan = autoSpots.plan;
+                message = save(autoSpots.shoot(alliance(), plan), p, "PLAN " + autoSpots.planName(plan) + " SHOOT");
                 if (!autoSpots.isSet(autoSpots.shoot(alliance(), plan))) message += " (= START spot: shoots without driving)";
-            }
-            if (gamepad1.circle && !prevCircle) {
-                message = save(autoSpots.end(alliance(), plan), p, headingDeg, "PLAN " + autoSpots.planName(plan) + " END");
+                shootSaved = true;
+            } else {
+                int plan = autoSpots.plan;
+                message = save(autoSpots.end(alliance(), plan), p, "PLAN " + autoSpots.planName(plan) + " LOADING ZONE");
+                endSaved = true;
             }
         }
+        prevSquare = gamepad1.square;
         prevCross = gamepad1.cross;
         prevCircle = gamepad1.circle;
 
@@ -129,9 +149,20 @@ public abstract class baseSetupAuto extends OpMode {
             else         intake.stop();
         }
 
-        telemetry.addLine(parkOnly() ? "Drive into your LOADING ZONE (not touching the wall), then O = save SAFE PARK spot"
-                : "X = save SHOOT spot   O = save END spot   hold TRIANGLE = test shot   hold R1 = load");
-        telemetry.addData("Now", "%.0f in ahead, %.0f in left, turned %.0f deg", p.getX(), p.getY(), headingDeg);
+        // ---- screen ----
+        telemetry.addLine(title());
+        telemetry.addLine((startPose != null ? "[OK] " : "[  ] ") + "SQUARE = 1. START here (robot on its start spot, touching the wall)");
+        if (!parkOnly()) {
+            telemetry.addLine((shootSaved ? "[OK] " : "[  ] ") + "X = 2. SHOOT here   (hold TRIANGLE to test the aim, R1 = load)");
+        }
+        telemetry.addLine((endSaved ? "[OK] " : "[  ] ") + "O = " + (parkOnly() ? "2" : "3")
+                + ". LOADING ZONE here (partly in it, NOT touching the wall)");
+        if (startPose != null) {
+            double[] r = relative(p);
+            telemetry.addData("From START", "%.0f in ahead, %.0f in left, turned %.0f deg", r[0], r[1], r[2]);
+        } else {
+            telemetry.addData("From START", "START not set yet - press SQUARE on the start spot");
+        }
         telemetry.addData("Odometry check", odometryText());
         double volts = hwManager.batteryVoltage();
         if (volts < 12.5) telemetry.addData("!! Battery", "%.1f V - LOW: motors may cut out, charge or swap", volts);
@@ -139,11 +170,23 @@ public abstract class baseSetupAuto extends OpMode {
             telemetry.addData("Shooter", "%.0f / %d  balls: %d", hwManager.shooterVelocity(), baseTeleOp.SHOT_VELOCITY, burst.balls());
         }
         if (!message.isEmpty()) telemetry.addLine(message);
-        showSpots();
-        telemetry.addLine("Rules: " + (parkOnly() ? "PARK" : "END")
-                + " spot partly in your LOADING ZONE and NOT touching the wall = LEAVE 3 + PARK 5."
-                + " Stay on your side of the field (G402) and don't touch the HIVE (G417).");
+        showSaved();
+        telemetry.addLine("Rules: stay on your side (G402), don't touch the HIVE (G417).");
         telemetry.update();
+    }
+
+    private String title() {
+        return parkOnly() ? "SETUP SAFE PARK " + alliance()
+                : "SETUP SHOOT AUTO " + alliance() + "   PLAN " + autoSpots.planName(autoSpots.plan);
+    }
+
+    // where the robot is now, measured from the START (□) spot: {inches ahead, inches left, degrees turned left}
+    private double[] relative(Pose p) {
+        double dx = p.getX() - startPose.getX(), dy = p.getY() - startPose.getY(), h0 = startPose.getHeading();
+        double ahead = dx * Math.cos(h0) + dy * Math.sin(h0);
+        double left = -dx * Math.sin(h0) + dy * Math.cos(h0);
+        double turn = Math.toDegrees(Math.atan2(Math.sin(p.getHeading() - h0), Math.cos(p.getHeading() - h0)));
+        return new double[] {ahead, left, turn};
     }
 
     // Odometry check: while you drive, the position must change the way the sticks say. Driving FORWARD must make
@@ -152,6 +195,7 @@ public abstract class baseSetupAuto extends OpMode {
     private Pose lastPose = null;
     private double fwdScore, leftScore, turnScore;
     private static final double CHECK_IN = 6, CHECK_RAD = Math.toRadians(20);
+    private boolean odometryBad = false;
 
     private void checkOdometry(Pose p, double fwdCmd, double leftCmd, double turnCmd) {
         if (lastPose != null) {
@@ -172,8 +216,6 @@ public abstract class baseSetupAuto extends OpMode {
         lastPose = p;
     }
 
-    private boolean odometryBad = false;
-
     private String odometryText() {
         return "forward " + check(fwdScore, CHECK_IN) + ", left " + check(leftScore, CHECK_IN)
                 + ", turn left " + check(turnScore, CHECK_RAD)
@@ -186,28 +228,30 @@ public abstract class baseSetupAuto extends OpMode {
         return "drive to check";
     }
 
-    private String save(double[] spot, Pose p, double headingDeg, String name) {
-        spot[0] = Math.round(p.getX());
-        spot[1] = Math.round(p.getY());
-        spot[2] = Math.round(headingDeg);
-        RobotLog.ii("SETUP", "%s %s saved: %.0f ahead, %.0f left, %.0f deg (odometry check: %s, battery %.1f V)",
+    private String save(double[] spot, Pose p, String name) {
+        double[] r = relative(p);
+        spot[0] = Math.round(r[0]);
+        spot[1] = Math.round(r[1]);
+        spot[2] = Math.round(r[2]);
+        double far = Math.hypot(spot[0], spot[1]);
+        RobotLog.ii("SETUP", "%s %s saved: %.0f ahead, %.0f left, %.0f deg from START (odometry check: %s, battery %.1f V)",
                 alliance(), name, spot[0], spot[1], spot[2], odometryText(), hwManager.batteryVoltage());
         boolean ok = settings.save();
         gamepad1.rumble(ok ? 200 : 800);
-        String msg = ok ? name + " spot SAVED on the robot" : name + " spot could NOT be saved";
-        // (a negative "ahead" is fine: it just means the robot drove backwards, e.g. it starts facing the wall)
+        String msg = ok ? name + " SAVED: " + autoSpots.text(spot) + " from START" : name + " could NOT be saved";
+        if (far > FAR_IN) msg += String.format("  !! that is %.0f ft from START - was SQUARE pressed on the start spot?", far / 12);
         if (odometryBad) msg += "  !! odometry counts the wrong way - this spot is wrong";
         return msg;
     }
 
-    private void showSpots() {
+    private void showSaved() {
         if (parkOnly()) {
-            telemetry.addData("Safe park spot", autoSpots.text(autoSpots.park(alliance())));
+            telemetry.addData("Saved safe park spot", autoSpots.text(autoSpots.park(alliance())));
             return;
         }
         int plan = autoSpots.plan;
-        telemetry.addData("Plan " + autoSpots.planName(plan) + " shoot spot", autoSpots.shootText(alliance(), plan));
-        telemetry.addData("Plan " + autoSpots.planName(plan) + " end spot", autoSpots.text(autoSpots.end(alliance(), plan)));
+        telemetry.addData("Saved plan " + autoSpots.planName(plan) + " shoot", autoSpots.shootText(alliance(), plan));
+        telemetry.addData("Saved plan " + autoSpots.planName(plan) + " loading zone", autoSpots.text(autoSpots.end(alliance(), plan)));
     }
 
     @Override

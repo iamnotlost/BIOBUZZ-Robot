@@ -118,10 +118,10 @@ stay `null`, code skips them, and the Driver Hub shows them on a "Not found / Mi
 | **✕** | **Hold**: feeder pushes balls up |
 | **○** | **Hold**: intake + feeder backwards (spit out / pull ball back) |
 | **△** | **Hold** to shoot at the one **shot speed**, let go to stop |
-| **D-pad up/down** | Shot **stronger/weaker by 20**, saved on the robot at once (tune with one controller) |
+| **D-pad up/down** | Shot **stronger/weaker by 10**, saved on the robot at once (tune with one controller) |
 | L1 | **Hold** to pre-spin the shooter at the shot speed |
 | Gamepad 2 D-pad up/down | Intake speed ±100 |
-| Gamepad 2 D-pad left/right | Shot speed ±20, saved at once |
+| Gamepad 2 D-pad left/right | Shot speed ±10, saved at once |
 | **Click right stick** | Drive top speed 40 → 60 → 80 → 100% → 40% (buzzes 1–4 times), saved at once |
 | Gamepad 2 R1 / L1 | Drive top speed ±10%, saved at once |
 | Gamepad 2 **✕** | **Save all settings** on the robot |
@@ -186,10 +186,15 @@ field, copy them into the code defaults.
   preloads with the same burst as TeleOp (`burst.java`; the upward CELL already has 3 NECTAR, so 4 POLLEN can TIP
   = 20 pts) → drive to the taught END spot. Stops shooting after 4 balls, 1.5 s without a ball, 8 s, or with 5 s
   of AUTO left. `preselectTeleOp` picks red/blueTeleOp afterwards.
-- **`setupAutoRed` / `setupAutoBlue`** (teach mode, TeleOp list, group setup): INIT on the START spot, drive by
-  hand (half speed, trigger = quarter), ✕ = save SHOOT spot, ○ = save END spot, hold △ = test burst, hold R1 =
-  load. Spots are saved per alliance in the settings file (`autoSpots.java`, keys redShootX/Y/H …, editable in
-  `settingsMenu`), measured from the start pose with the same Pedro/Pinpoint odometry the auto uses.
+- **`setupAutoRed` / `setupAutoBlue`** (teach mode, TeleOp list, group setup): INIT anywhere (keep still), ▶,
+  drive by hand (half speed, trigger = quarter). **□ = START here** (robot on its start spot touching the wall),
+  **✕ = SHOOT here** (✕ right at the start = shoot without driving), **○ = LOADING ZONE here** (end spot, partly in
+  it, not touching the wall); hold △ = test burst, hold R1 = load. Spots are saved measured from where □ was
+  pressed (before □ existed, the start was the INIT spot, and teaching after INIT elsewhere saved a shoot spot 103″
+  to the side). Screen: checklist, position from START, odometry check, warning if a spot is > 7 ft from START.
+  Saved per alliance and plan in the settings file (`autoSpots.java`), editable in `settingsMenu`.
+- **Safety net:** an auto never drives to a spot more than `baseAuto.MAX_SPOT_IN` (100″) from the start; it logs
+  "too far, NOT driving there" instead.
 - **Rules (manual TU08):** G304 start touching the wall, own side, NOT in the LOADING ZONE, 4 POLLEN, motionless
   after INIT. LEAVE = not touching the wall and PARK = partly in own LOADING ZONE, both judged at the END of AUTO
   → the END spot must be in the LOADING ZONE and off the wall (returning to the start spot scores neither).

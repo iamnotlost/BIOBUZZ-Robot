@@ -50,7 +50,7 @@ public class settings {
 
     public static final List<Item> ITEMS = new ArrayList<>();
     static {
-        ITEMS.add(new Item("shot", "Shot speed", 20, 200, 2800, true,
+        ITEMS.add(new Item("shot", "Shot speed", 10, 200, 2800, true,
                 () -> baseTeleOp.SHOT_VELOCITY, v -> baseTeleOp.SHOT_VELOCITY = (int) v));
         ITEMS.add(new Item("shotWait", "Shot: wait for wheel between balls", 1, 0, 1, true,
                 () -> baseTeleOp.WAIT_BETWEEN_BALLS ? 1 : 0, v -> baseTeleOp.WAIT_BETWEEN_BALLS = v >= 0.5));

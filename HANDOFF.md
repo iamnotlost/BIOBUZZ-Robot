@@ -168,6 +168,9 @@ field, copy them into the code defaults.
 - Paths are **relative to the start pose** (0,0,0): +x = straight ahead, +y = robot's left. The robot may start facing the wall; then driving into the field is NEGATIVE x (backwards), which is fine.
 - **Paths don't hold at the end** (`followPath(path, false)`): Pedro's automatic hold made the robot rock forward
   and backward at the spot. A drive also counts as done within `ARRIVED_IN` 1″ / `ARRIVED_DEG` 3° of the spot.
+- **Shooter learning only when steady** (`shooter.STEADY_BAND` 20 over 0.1 s, and not while feeding): learning
+  while the wheel was still speeding up ("windup") made it hold 20-30 above the target and creep higher every burst
+  (1190 → 1210 → 1230 → 1240+, seen in the 2026-11-13 log). Simulated on the logged wheel: 1187-1194 every burst.
 - **Shooter gentle start** (`shooter.SPINUP_RAMP_PER_S` 2.0 while below 80 % of target): both motors at 100 % from
   standstill dropped the battery to ~7 V and the Expansion Hub (shooter + feeder) cut out. If the Driver Hub still
   shows big drops, check the battery (try another), the battery connector and the main power switch.
@@ -193,7 +196,7 @@ field, copy them into the code defaults.
   pressed (before □ existed, the start was the INIT spot, and teaching after INIT elsewhere saved a shoot spot 103″
   to the side). Screen: checklist, position from START, odometry check, warning if a spot is > 7 ft from START.
   Saved per alliance and plan in the settings file (`autoSpots.java`), editable in `settingsMenu`.
-- **Safety net:** an auto never drives to a spot more than `baseAuto.MAX_SPOT_IN` (100″) from the start; it logs
+- **Safety net:** an auto never drives to a spot more than `baseAuto.MAX_SPOT_IN` (165″, the most possible on our half; 100 blocked a real 115″ LOADING ZONE spot) from the start; it logs
   "too far, NOT driving there" instead.
 - **Rules (manual TU08):** G304 start touching the wall, own side, NOT in the LOADING ZONE, 4 POLLEN, motionless
   after INIT. LEAVE = not touching the wall and PARK = partly in own LOADING ZONE, both judged at the END of AUTO

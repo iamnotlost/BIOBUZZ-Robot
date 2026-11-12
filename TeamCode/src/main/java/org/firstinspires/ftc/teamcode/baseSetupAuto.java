@@ -29,8 +29,8 @@ public abstract class baseSetupAuto extends OpMode {
 
     public static double DRIVE_SCALE = 0.5;
     public static double SLOW_SCALE  = 0.25;
-    // A spot this far from START is probably a mistake (START pressed in the wrong place?)
-    public static double FAR_IN = 84;
+    // A spot this far from START can't be on our half of the field (START pressed in the wrong place?)
+    public static double FAR_IN = 165;
 
     hwManager hwManager;
     shooter shooter;

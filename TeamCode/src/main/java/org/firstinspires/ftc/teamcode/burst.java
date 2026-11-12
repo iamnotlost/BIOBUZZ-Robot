@@ -63,7 +63,7 @@ public class burst {
             feeding = false;   // wait the moment it takes the wheel to get back to speed
         }
 
-        shooter.setLearning(firstBall);
+        shooter.setLearning(!feeding);   // learn only while no ball is being fed (and the wheel is steady)
         shooter.update();
         setFeeder(feeding ? baseTeleOp.SHOT_FEED_VELOCITY : 0);
         setIntake(feeding);

@@ -23,8 +23,9 @@ public abstract class baseAuto extends LinearOpMode {
     public static final double AUTO_SECONDS = 30;
     // Stop moving this long before AUTO ends so nothing is still powered at 0:00 (G403)
     public static double SAFETY_MARGIN_S = 1.0;
-    // Never drive to a taught spot farther than this from the start (inches): it must have been taught wrong
-    public static double MAX_SPOT_IN = 100;
+    // Never drive to a taught spot farther than this from the start (inches): nothing on our half of the field is
+    // farther (72 x 144 in), so it must have been taught wrong. (100 was too small: a real LOADING ZONE spot was 115.)
+    public static double MAX_SPOT_IN = 165;
     private static final int EVENTS_SHOWN = 7;
 
     hwManager hwManager;

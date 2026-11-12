@@ -371,7 +371,7 @@ public abstract class baseTeleOp extends OpMode {
                 feedingShot = false;
                 waitTimer.reset();
             }
-            shooter.setLearning(firstBall);  // learn the holding power only before the burst starts
+            shooter.setLearning(!feedingShot);  // learn only while no ball is being fed (and the wheel is steady)
             setFeeder(feedingShot ? SHOT_FEED_VELOCITY : 0);
             setIntake(feedingShot ? 1 : 0);
             logShot(target, vel);

@@ -12,6 +12,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 //   Cross (X)                  2. SHOOT here      (press it right at the start to shoot without driving)
 //   Circle (O)                 3. LOADING ZONE    (end spot: partly in the LOADING ZONE, NOT touching the wall)
 //   Left stick / right stick   drive / turn (half speed; hold a trigger for quarter speed)
+//   L1                         path point here: the auto drives THROUGH it on the way (around the HIVE, the
+//                              partner robot...). Up to 5 per route, in order. D-pad down = undo the last one.
 //   Hold triangle              shoot from here, to check the aim (same burst as the auto)
 //   Hold R1                    intake, to load balls again for another test
 // SHOOT and LOADING ZONE are saved measured from where you pressed □, so it does not matter where the robot was
@@ -39,7 +41,9 @@ public abstract class baseSetupAuto extends OpMode {
     burst burst;
     Follower follower;
 
-    private boolean prevCross, prevCircle, prevTriangle, prevSquare, prevLeft, prevRight;
+    private boolean prevCross, prevCircle, prevTriangle, prevSquare, prevLeft, prevRight, prevL1, prevDown;
+    // path points taught since the last START / SHOOT save; they belong to the route being driven now
+    private final java.util.List<double[]> legPoints = new java.util.ArrayList<>();
     private boolean loading = false;
     private String message = "";
     private Pose startPose = null;          // where □ was pressed
@@ -101,6 +105,7 @@ public abstract class baseSetupAuto extends OpMode {
         if (gamepad1.square && !prevSquare) {
             startPose = p;
             shootSaved = endSaved = false;
+            legPoints.clear();
             gamepad1.rumble(200);
             RobotLog.ii("SETUP", "%s %s START set (odometry check: %s, battery %.1f V)",
                     alliance(), parkOnly() ? "PARK" : "PLAN " + autoSpots.planName(autoSpots.plan),
@@ -108,6 +113,25 @@ public abstract class baseSetupAuto extends OpMode {
             message = parkOnly() ? "START set. Now drive into the LOADING ZONE (not touching the wall) and press O."
                     : "START set. Now drive to where it should shoot and press X (or X right here to shoot from the start).";
         }
+        // path points (only after START): L1 = drive through here, D-pad down = undo the last one
+        if (startPose != null && gamepad1.left_bumper && !prevL1) {
+            if (legPoints.size() >= autoSpots.MAX_POINTS) {
+                message = "!! " + autoSpots.MAX_POINTS + " path points is the most per route";
+                gamepad1.rumble(800);
+            } else {
+                double[] r = relative(p);
+                legPoints.add(new double[] {Math.round(r[0]), Math.round(r[1]), Math.round(r[2])});
+                message = "Path point " + legPoints.size() + " added: " + autoSpots.text(legPoints.get(legPoints.size() - 1));
+                gamepad1.rumble(150);
+            }
+        }
+        if (gamepad1.dpad_down && !prevDown && !legPoints.isEmpty()) {
+            legPoints.remove(legPoints.size() - 1);
+            message = "Last path point removed (" + legPoints.size() + " left)";
+        }
+        prevL1 = gamepad1.left_bumper;
+        prevDown = gamepad1.dpad_down;
+
         // 2. SHOOT and 3. LOADING ZONE (only after START)
         boolean cross = gamepad1.cross && !prevCross, circle = gamepad1.circle && !prevCircle;
         if ((cross && !parkOnly()) || circle) {
@@ -115,16 +139,22 @@ public abstract class baseSetupAuto extends OpMode {
                 message = "!! First put the robot on its START spot and press SQUARE.";
                 gamepad1.rumble(800);
             } else if (parkOnly()) {
-                message = save(autoSpots.park(alliance()), p, "SAFE PARK");
+                autoSpots.setPoints(autoSpots.parkRoute(alliance()), legPoints);
+                message = save(autoSpots.park(alliance()), p, "SAFE PARK") + viaText();
+                legPoints.clear();
                 endSaved = true;
             } else if (cross) {
                 int plan = autoSpots.plan;
-                message = save(autoSpots.shoot(alliance(), plan), p, "PLAN " + autoSpots.planName(plan) + " SHOOT");
+                autoSpots.setPoints(autoSpots.route(alliance(), plan, true), legPoints);
+                message = save(autoSpots.shoot(alliance(), plan), p, "PLAN " + autoSpots.planName(plan) + " SHOOT") + viaText();
                 if (!autoSpots.isSet(autoSpots.shoot(alliance(), plan))) message += " (= START spot: shoots without driving)";
+                legPoints.clear();
                 shootSaved = true;
             } else {
                 int plan = autoSpots.plan;
-                message = save(autoSpots.end(alliance(), plan), p, "PLAN " + autoSpots.planName(plan) + " LOADING ZONE");
+                autoSpots.setPoints(autoSpots.route(alliance(), plan, false), legPoints);
+                message = save(autoSpots.end(alliance(), plan), p, "PLAN " + autoSpots.planName(plan) + " LOADING ZONE") + viaText();
+                legPoints.clear();
                 endSaved = true;
             }
         }
@@ -157,6 +187,8 @@ public abstract class baseSetupAuto extends OpMode {
         }
         telemetry.addLine((endSaved ? "[OK] " : "[  ] ") + "O = " + (parkOnly() ? "2" : "3")
                 + ". LOADING ZONE here (partly in it, NOT touching the wall)");
+        telemetry.addLine("     L1 = path point here (to drive around things), D-pad down = undo   points on this route: "
+                + legPoints.size());
         if (startPose != null) {
             double[] r = relative(p);
             telemetry.addData("From START", "%.0f in ahead, %.0f in left, turned %.0f deg", r[0], r[1], r[2]);
@@ -173,6 +205,10 @@ public abstract class baseSetupAuto extends OpMode {
         showSaved();
         telemetry.addLine("Rules: stay on your side (G402), don't touch the HIVE (G417).");
         telemetry.update();
+    }
+
+    private String viaText() {
+        return legPoints.isEmpty() ? " (straight line)" : " (via " + legPoints.size() + " path point" + (legPoints.size() > 1 ? "s)" : ")");
     }
 
     private String title() {

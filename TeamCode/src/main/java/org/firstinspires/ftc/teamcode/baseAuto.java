@@ -137,24 +137,47 @@ public abstract class baseAuto extends LinearOpMode {
     // Drives to a spot {x in, y in, heading deg}, turning on the way. Gives up after maxSeconds.
     // Logs how far off it ended up. Returns false if it gave up (blocked?) or AUTO ran out of time.
     protected boolean goTo(String name, double[] spot, double maxSeconds) {
+        return goTo(name, spot, new java.util.ArrayList<double[]>(), maxSeconds);
+    }
+
+    // Same, but drives THROUGH the taught path points first (in order, one smooth path, no stops), so the robot
+    // doesn't take a straight line through things.
+    protected boolean goTo(String name, double[] spot, java.util.List<double[]> via, double maxSeconds) {
         // Safety net: a spot this far from the start was taught wrong (it once was 103 in to the side and the
         // robot drove across the field). Don't drive there at all.
-        double far = Math.hypot(spot[0], spot[1]);
-        if (far > MAX_SPOT_IN) {
-            event(String.format("%s is %.0f in from START - too far, NOT driving there (teach it again)", name, far));
-            return false;
+        java.util.List<double[]> all = new java.util.ArrayList<>(via);
+        all.add(spot);
+        for (double[] s : all) {
+            double far = Math.hypot(s[0], s[1]);
+            if (far > MAX_SPOT_IN) {
+                event(String.format("%s%s is %.0f in from START - too far, NOT driving there (teach it again)",
+                        name, s == spot ? "" : " path point", far));
+                return false;
+            }
         }
         targetName = name;
         target = spot;
-        event(String.format("drive to %s (%.0f, %.0f, %.0f deg)", name, spot[0], spot[1], spot[2]));
+        event(String.format("drive to %s (%.0f, %.0f, %.0f deg)%s", name, spot[0], spot[1], spot[2],
+                via.isEmpty() ? "" : " via " + via.size() + " path point" + (via.size() > 1 ? "s" : "")));
         ElapsedTime t = new ElapsedTime();
         Pose from = follower.getPose();
-        // turn the short way round (e.g. 30 deg right, not 330 deg left)
-        double turn = Math.toRadians(spot[2]) - from.getHeading();
-        turn = Math.atan2(Math.sin(turn), Math.cos(turn));
-        double heading = from.getHeading() + turn;
+        // one straight piece per path point, then to the spot; each piece turns smoothly to that point's heading
+        // (always the short way round, e.g. 30 deg right, not 330 deg left)
+        com.pedropathing.paths.PathBuilder builder = follower.pathBuilder();
+        double fx = from.getX(), fy = from.getY(), fh = from.getHeading();
+        int pieces = 0;
+        for (double[] s : all) {
+            double h = fh + Math.atan2(Math.sin(Math.toRadians(s[2]) - fh), Math.cos(Math.toRadians(s[2]) - fh));
+            if (Math.hypot(s[0] - fx, s[1] - fy) < 1) { fh = h; continue; }   // too close to the last point
+            builder.addPath(new BezierLine(new Pose(fx, fy), new Pose(s[0], s[1]))).setLinearHeadingInterpolation(fh, h);
+            fx = s[0];
+            fy = s[1];
+            fh = h;
+            pieces++;
+        }
+        double heading = fh;
         boolean finished;
-        if (Math.hypot(spot[0] - from.getX(), spot[1] - from.getY()) < 1) {
+        if (pieces == 0) {
             // (almost) no distance to drive: just turn on the spot
             follower.turnTo(heading);
             finished = false;
@@ -171,10 +194,7 @@ public abstract class baseAuto extends LinearOpMode {
             if (!follower.isBusy() && !follower.isTurning()) finished = true;
             follower.breakFollowing();
         } else {
-            finished = runPath(follower.pathBuilder()
-                    .addPath(new BezierLine(new Pose(from.getX(), from.getY()), new Pose(spot[0], spot[1])))
-                    .setLinearHeadingInterpolation(from.getHeading(), heading)
-                    .build(), maxSeconds);
+            finished = runPath(builder.build(), maxSeconds);
         }
         Pose p = follower.getPose();
         double off = Math.hypot(spot[0] - p.getX(), spot[1] - p.getY());

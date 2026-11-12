@@ -30,6 +30,7 @@ public abstract class baseParkAuto extends baseAuto {
             follower.update();
             telemetry.addData("Auto", "SAFE PARK " + alliance());
             telemetry.addData("Start", "CORNER start spot, touching the wall, not in the LOADING ZONE");
+            telemetry.addData("Path points", "%d", autoSpots.points(autoSpots.parkRoute(alliance())).size());
             telemetry.addData("Park at", taught ? autoSpots.text(park)
                     : "not taught - using settingsMenu numbers (run setupPark" + (alliance() == Alliance.RED ? "Red" : "Blue") + ")");
             double volts = hwManager.batteryVoltage();
@@ -42,7 +43,12 @@ public abstract class baseParkAuto extends baseAuto {
         startTimer();
 
         waitSeconds(START_DELAY_S);
-        if (taught) {
+        java.util.List<double[]> via = autoSpots.points(autoSpots.parkRoute(alliance()));
+        if (taught && !via.isEmpty()) {
+            // taught path points: drive start -> points -> park spot exactly as taught
+            step("1/1 to the LOADING ZONE via path points");
+            goTo("PARK spot", park, via, DRIVE_MAX_S);
+        } else if (taught) {
             // 1. straight off the wall (no scraping along it), 2. sideways into the LOADING ZONE.
             // "Off the wall" is the same way the taught park spot is: forwards if the robot starts facing the
             // field, BACKWARDS if it starts facing the wall (then the park spot's "ahead" is negative).

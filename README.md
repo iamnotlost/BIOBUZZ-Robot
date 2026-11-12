@@ -28,7 +28,7 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 
 **Setup**
 - `setupParkRed`, `setupParkBlue` – teach the safe park auto: SQUARE on the corner start spot, drive into the LOADING ZONE, O saves.
-- `setupAutoRed`, `setupAutoBlue` – teach the shooting auto: drive the robot to its start spot and press SQUARE, drive to where it shoots and press X, drive partly into the LOADING ZONE and press O. Hold triangle test-shoots.
+- `setupAutoRed`, `setupAutoBlue` – teach the shooting auto: drive the robot to its start spot and press SQUARE, drive to where it shoots and press X, drive partly into the LOADING ZONE and press O. Hold triangle test-shoots. Press L1 on the way to add path points the auto drives through (D-pad down = undo).
 - `settingsMenu` – change shot speeds, intake, drive speed, auto park distances and more with the D-pad, press X to save them on the robot (file `FIRST/biobuzz_settings.txt`). No re-upload needed. Nothing moves in this menu.
 
 **TeleOp**
@@ -54,8 +54,8 @@ instead of crashing, and the Driver Station shows it on the **Missing** line.
 | Circle | **Hold**: intake, feeder and shooter wheel backwards (pull a stuck ball back out / spit it out) |
 | Triangle | **Hold** to shoot: the wheel spins up first; the feeder runs only while the wheel is at the shot speed and stops after each ball until the wheel is back at speed, so every ball flies the same. Let go to stop |
 | Left bumper (L1) | **Hold** to pre-spin the shooter, so triangle fires sooner |
-| D-pad up/down | Shot stronger/weaker by 10, saved on the robot at once (one controller is enough to tune shots) |
-| Gamepad 2 D-pad left/right | Shot speed -/+ 10, saved at once |
+| D-pad up/down | Shot stronger/weaker by 5, saved on the robot at once (one controller is enough to tune shots) |
+| Gamepad 2 D-pad left/right | Shot speed -/+ 5, saved at once |
 | Gamepad 2 cross | SAVE all settings on the robot |
 | Click right stick | Drive top speed 40% → 60% → 80% → 100% → back to 40% (buzzes 1–4 times), remembered on the robot |
 | Gamepad 2 R1/L1 | Drive top speed up/down by 10%, remembered |

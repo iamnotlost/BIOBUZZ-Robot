@@ -48,6 +48,9 @@ public abstract class baseShootAuto extends baseAuto {
             telemetry.addData("Start", "plan %s START spot, touching the wall, 4 POLLEN loaded", autoSpots.planName(p));
             telemetry.addData("Shoot from", autoSpots.shootText(alliance(), p));
             telemetry.addData("End at", autoSpots.text(autoSpots.end(alliance(), p)));
+            telemetry.addData("Path points", "%d on the way to shoot, %d on the way to the LOADING ZONE",
+                    autoSpots.points(autoSpots.route(alliance(), p, true)).size(),
+                    autoSpots.points(autoSpots.route(alliance(), p, false)).size());
             if (!autoSpots.taught(alliance(), p)) {
                 telemetry.addLine("!! PLAN " + autoSpots.planName(p) + " NOT SET UP - run " + setupName
                         + " (it would only shoot from the start and drive straight off the wall)");
@@ -78,7 +81,7 @@ public abstract class baseShootAuto extends baseAuto {
         waitSeconds(baseParkAuto.START_DELAY_S);
         if (autoSpots.isSet(shootSpot)) {
             step("1/3 drive to SHOOT spot");
-            goTo("SHOOT spot", shootSpot, DRIVE_MAX_S);
+            goTo("SHOOT spot", shootSpot, autoSpots.points(autoSpots.route(alliance(), p, true)), DRIVE_MAX_S);
         } else {
             event("shooting from the START spot (no drive)");
         }
@@ -86,7 +89,7 @@ public abstract class baseShootAuto extends baseAuto {
         shootAll();
         if (taught) {
             step("3/3 drive to END spot");
-            goTo("END spot", endSpot, DRIVE_MAX_S);
+            goTo("END spot", endSpot, autoSpots.points(autoSpots.route(alliance(), p, false)), DRIVE_MAX_S);
         } else {
             // nothing taught: at least get off the wall for LEAVE
             step("3/3 drive off the wall (plan not set up)");

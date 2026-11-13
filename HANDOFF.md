@@ -64,7 +64,7 @@ There is **no IMU** in `MagisMain` and **no color sensor** on the robot yet.
   stretch and fly off.
 - **Feeder (`supply`):** carries balls up into the shooter. Positive speed = up.
 - **Shooter:** one big wheel in a curved hood, two motors (`shooter` + `secondShooter`). Speed control is our own
-  (`shooter.java`): both motors get the SAME power = kF·target + kP·error + small learned extra (kF 0.00037, kP 0.001,
+  (`subsystems/Shooter.java`): both motors get the SAME power = kF·target + kP·error + small learned extra (kF 0.00037, kP 0.001,
   kI 0.003 learning only while waiting for the first ball, kept between bursts; picked with a simulation fitted to
   the robot log. kF 0.00028 was too low (wheel stuck at 1330 of 1420); stronger kP or a full-power boost made it overshoot to
   1540 after every ball; correcting for battery voltage made it worse because the battery sags to ~8.5 V on spin-up).
@@ -87,22 +87,26 @@ There is **no IMU** in `MagisMain` and **no color sensor** on the robot yet.
 Built on FTC SDK **11.1**, **Pedro Pathing 2.0.2** for autonomous paths. Every device is optional: missing ones
 stay `null`, code skips them, and the Driver Hub shows them on a "Not found / Missing" line.
 
+Layout (cleaned up 2026-11-13; the version before is git tag `before-cleanup`):
+
 | File | What it does |
 |---|---|
-| `hwManager` | Finds all devices by name, motor directions, **bulk reads**, Pinpoint with stuck-bus protection (`pinpointFailed`), heading, battery voltage, intake/shooter velocity |
-| `drivetrain` | Mecanum math. Robot-centric and field-centric. Left stick read as one arrow (radial dead zone 0.06, no sideways drift); `shape()` = any push past the dead zone starts at `MIN_DRIVE_POWER` 0.07 (turn 0.06) and curves (^1.8) up to top speed; triggers lower only the top speed. Speeds up in `RAMP_SECONDS` 0.2, slows/stops in `STOP_SECONDS` 0.1 (brake). Tuned 2026-11-12 after "slow to react, small moves dead, jerky stops, too fast"; `MAX_SPEED` 0.4, `TURN_SPEED` 0.4 |
-| `intake` | Intake motor, `IN_VELOCITY` 300 / `OUT_VELOCITY` -300 |
-| `supply` | Feeder motor |
-| `shooter` | Shooter motors, `spinTo(speed)` |
-| `elementSensor` | Color sensor ball detection (POLLEN / red / blue NECTAR) – ready for when a `colorSensor` is added |
-| `matchTimer` | 2:00 TeleOp clock; rumble at 1:00 (NECTAR → FLOWER allowed) and 0:15 (go park); stops robot at 0:00 |
-| `baseTeleOp` | All driver control (see section 5). `redTeleOp` / `blueTeleOp` just pick the alliance |
-| `settings` + `settingsMenu` | Settings saved on the robot (section 6) |
-| `baseAuto`, `leaveAuto`, `baseParkAuto`, `parkRed`, `parkBlue` | Autonomous (section 7) |
-| `hardwareTest` | Runs any motor/servo by selection to check wiring (servos only move after you touch the stick) |
-| `driveTest` | Drive base only; hold D-pad to spin one wheel |
+| `hardware/RobotHardware` | Finds all devices by name, motor directions, Pinpoint (SDK driver `com.qualcomm.hardware.gobilda.GoBildaPinpointDriver`, same as Pedro) with stuck-bus protection, heading, battery voltage. `update(Odometry)` once per loop; motor speeds are read lazily, at most once per loop |
+| `subsystems/Drivetrain` | Mecanum math, robot/field-centric. `shape()` = dead zone 0.06, any push starts at `MIN_DRIVE_POWER` 0.07 (turn 0.06), curve ^1.8 to top speed; `RAMP_SECONDS` 0.2 up, `STOP_SECONDS` 0.1 down (brake); `MAX_SPEED` / `TURN_SPEED`, speed levels 40/60/80/100 % |
+| `subsystems/Intake` | `IN_VELOCITY` 300 (rubber bands fly off faster); `load()` pulls in with auto-unjam |
+| `subsystems/Feeder` | Feeder motor ("supply" in the config), `UP_VELOCITY` 1400, `REVERSE_VELOCITY` 800 |
+| `subsystems/Shooter` | Wheel speed control for both motors (kF/kP/steady-only kI, gentle start, gentle reverse) |
+| `subsystems/ShotSequencer` | Shoots balls one after another at the same speed (TeleOp △, autos, setup test shot); writes the `SHOT` log |
+| `subsystems/HeadingHold` | Share toggles; gives up past 30° |
+| `subsystems/ElementSensor` | Color sensor ball detection – ready for when a `colorSensor` is added |
+| `util/MatchTimer` | 2:00 TeleOp clock; rumble at 1:00 and 0:15; stops the robot at 0:00 |
+| `util/Settings` + `opmodes/setup/SettingsMenu` | Settings saved on the robot (section 6) |
+| `util/AutoSpots` | Taught spots, plans A/B, path points |
+| `opmodes/teleop/BaseTeleOp` | All driver control (section 5). `RedTeleOp` / `BlueTeleOp` pick the alliance |
+| `opmodes/auto/` | `BaseAuto`, `ShootAuto`, `ParkAuto`, `LeaveAuto` + red/blue OpModes (section 7) |
+| `opmodes/setup/` | `SetupAuto` + red/blue shoot and park setup OpModes, `OdometryCheck` |
+| `opmodes/test/` | `HardwareTest` (any motor/servo), `DriveTest` (drive base only) |
 | `pedroPathing/Constants`, `Tuning` | Pedro Pathing tuning (from this same robot last season) |
-| `Alliance` | RED/BLUE, used to mirror things |
 
 ## 5. TeleOp controls (gamepad 1 unless noted)
 
@@ -168,10 +172,10 @@ field, copy them into the code defaults.
 - Paths are **relative to the start pose** (0,0,0): +x = straight ahead, +y = robot's left. The robot may start facing the wall; then driving into the field is NEGATIVE x (backwards), which is fine.
 - **Paths don't hold at the end** (`followPath(path, false)`): Pedro's automatic hold made the robot rock forward
   and backward at the spot. A drive also counts as done within `ARRIVED_IN` 1″ / `ARRIVED_DEG` 3° of the spot.
-- **Shooter learning only when steady** (`shooter.STEADY_BAND` 20 over 0.1 s, and not while feeding): learning
+- **Shooter learning only when steady** (`Shooter.STEADY_BAND` 20 over 0.1 s, and not while feeding): learning
   while the wheel was still speeding up ("windup") made it hold 20-30 above the target and creep higher every burst
   (1190 → 1210 → 1230 → 1240+, seen in the 2026-11-13 log). Simulated on the logged wheel: 1187-1194 every burst.
-- **Shooter gentle start** (`shooter.SPINUP_RAMP_PER_S` 2.0 while below 80 % of target): both motors at 100 % from
+- **Shooter gentle start** (`Shooter.SPINUP_RAMP_PER_S` 2.0 while below 80 % of target): both motors at 100 % from
   standstill dropped the battery to ~7 V and the Expansion Hub (shooter + feeder) cut out. If the Driver Hub still
   shows big drops, check the battery (try another), the battery connector and the main power switch.
 - **Plan A / Plan B** (shooting auto): two taught routes per alliance with different START spots, chosen with the
@@ -186,7 +190,7 @@ field, copy them into the code defaults.
   auto until STOP.
 - Every auto stops `SAFETY_MARGIN_S` (1 s) before 30 s.
 - **`shootRed` / `shootBlue`** (main auto): START → drive to the taught SHOOT spot (turning to aim) → shoot all 4
-  preloads with the same burst as TeleOp (`burst.java`; the upward CELL already has 3 NECTAR, so 4 POLLEN can TIP
+  preloads with the same `ShotSequencer` as TeleOp ( the upward CELL already has 3 NECTAR, so 4 POLLEN can TIP
   = 20 pts) → drive to the taught END spot. Stops shooting after 4 balls, 1.5 s without a ball, 8 s, or with 5 s
   of AUTO left. `preselectTeleOp` picks red/blueTeleOp afterwards.
 - **`setupAutoRed` / `setupAutoBlue`** (teach mode, TeleOp list, group setup): INIT anywhere (keep still), ▶,
@@ -195,14 +199,14 @@ field, copy them into the code defaults.
   it, not touching the wall); hold △ = test burst, hold R1 = load. Spots are saved measured from where □ was
   pressed (before □ existed, the start was the INIT spot, and teaching after INIT elsewhere saved a shoot spot 103″
   to the side). Screen: checklist, position from START, odometry check, warning if a spot is > 7 ft from START.
-  Saved per alliance and plan in the settings file (`autoSpots.java`), editable in `settingsMenu`.
+  Saved per alliance and plan in the settings file (`util/AutoSpots.java`), editable in `settingsMenu`.
 - **Path points** (so the auto doesn't drive a straight line through things): in setupAuto / setupPark, after □,
   **L1** adds a point where the robot is (up to 5 per route, D-pad down = undo). Points taught before ✕ belong to
   start → shoot, points after ✕ to shoot → LOADING ZONE (in setupPark: start → park). The auto drives through them in
   one smooth Pedro PathChain (one straight piece per point, heading turns to each point's taught heading). Stored in
   the settings file as `path.<route>` = `x,y,h;x,y,h` (routes `blueAShoot`, `blueAEnd`, `bluePark`, …; not in
   settingsMenu).
-- **Safety net:** an auto never drives to a spot more than `baseAuto.MAX_SPOT_IN` (165″, the most possible on our half; 100 blocked a real 115″ LOADING ZONE spot) from the start; it logs
+- **Safety net:** an auto never drives to a spot more than `BaseAuto.MAX_SPOT_IN` (165″, the most possible on our half; 100 blocked a real 115″ LOADING ZONE spot) from the start; it logs
   "too far, NOT driving there" instead.
 - **Rules (manual TU08):** G304 start touching the wall, own side, NOT in the LOADING ZONE, 4 POLLEN, motionless
   after INIT. LEAVE = not touching the wall and PARK = partly in own LOADING ZONE, both judged at the END of AUTO
@@ -236,7 +240,7 @@ run). Useful searches: `SHOT` (shot recorder), `SDA_STUCK` (Pinpoint cable), `st
 ## 9. What's next (open items)
 
 1. **Arena tuning** (in progress): the one shot speed, auto park distances → then make them code defaults.
-2. Check the recorded `SHOT` data: do all balls in a burst leave at the same speed? Tune `shooter.kF/kP/kI` / window / feed speed. The `SHOT` log now also has the motor power as a 6th column.
+2. Check the recorded `SHOT` data: do all balls in a burst leave at the same speed? Tune `Shooter.kF/kP/kI` / window / feed speed. The `SHOT` log now also has the motor power as a 6th column.
 3. Teach and test `shootRed`/`shootBlue` at the field (setupAutoRed/Blue), check 4 POLLEN tip the HIVE.
 4. FLOWER claw code once it's built (outtake servos already in config); enforce NECTAR only in last 60 s.
 5. 4-ball limit (G407) and opponent-NECTAR rejection once a color/distance sensor is added.

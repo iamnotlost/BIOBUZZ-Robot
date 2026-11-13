@@ -74,11 +74,17 @@ shooting. The robot stops at 0:00. A long rumble means the color sensor sees the
 For practice longer than 2:00, set `matchTimer.ENFORCE_MATCH_END = false`.
 
 ## Code layout
-All team code is in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`:
+All team code is in `TeamCode/src/main/java/org/firstinspires/ftc/teamcode/`, in the usual FTC layout:
 
-- `hwManager` – hardware map and device names
-- `drivetrain`, `intake`, `shooter`, `supply`, `elementSensor` – subsystems
-- `baseTeleOp` – driver control, shared by `redTeleOp` and `blueTeleOp`
-- `baseAuto`, `baseParkAuto` – autonomous helpers
-- `matchTimer` – TELEOP clock
-- `pedroPathing/` – path following constants and tuning
+| Folder | What's in it |
+|---|---|
+| `hardware/RobotHardware` | Finds every device by name, motor directions, sensor reads (once per loop, only what's needed), Pinpoint with stuck-cable protection, battery voltage |
+| `subsystems/` | `Drivetrain` (mecanum + stick feel), `Intake` (with unjam), `Feeder`, `Shooter` (wheel speed control), `ShotSequencer` (shoots balls one after another at the same speed; used by TeleOp, autos and setup), `HeadingHold`, `ElementSensor` (color sensor, not fitted yet) |
+| `opmodes/teleop/` | `BaseTeleOp` (all driver controls) + `RedTeleOp`, `BlueTeleOp` |
+| `opmodes/auto/` | `BaseAuto` (driving with Pedro, debug screen and log) + `ShootAuto`, `ParkAuto`, `LeaveAuto` and the red/blue OpModes |
+| `opmodes/setup/` | `SetupAuto` (teach spots and path points) + red/blue setup OpModes, `SettingsMenu`, `OdometryCheck` |
+| `opmodes/test/` | `HardwareTest`, `DriveTest` |
+| `util/` | `Settings` (saved on the robot), `AutoSpots` (taught spots), `MatchTimer`, `Alliance`, `Angles` |
+| `pedroPathing/` | Pedro Pathing constants and tuning OpMode |
+
+**Loop performance:** every loop calls `RobotHardware.update()` once; motor speeds are read at most once per loop (one bulk read per hub) and only if something needs them; the Pinpoint is only read in TeleOp when field-centric or heading hold is on (heading-only read). Motor commands are only sent when they change.
